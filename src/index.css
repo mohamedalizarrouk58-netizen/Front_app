@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark, .dark *));
+
+@theme {
+  --font-body: 'Manrope', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: #0f172a;
+  background: #ffffff;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+html.dark body {
+  color: #e2e8f0;
+  background:
+    radial-gradient(circle at 5% 12%, rgba(127, 181, 198, 0.15), transparent 42%),
+    radial-gradient(circle at 88% 80%, rgba(20, 95, 122, 0.15), transparent 36%),
+    #0f172a;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.glass-panel {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 16px 40px -26px rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+html.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 16px 40px -26px rgba(0, 0, 0, 0.6);
+}
+
+.dashboard-grid {
+  background-image:
+    linear-gradient(rgba(20, 95, 122, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 95, 122, 0.05) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+html.dark .dashboard-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+}
+
+.sidebar-link {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.35);
+  transition: all 0.2s ease;
+}
+
+html.dark .sidebar-link {
+  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.35);
+}
+
+.sidebar-link:hover {
+  border-color: rgba(20, 95, 122, 0.18);
+  color: #0f4e64;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+html.dark .sidebar-link:hover {
+  border-color: rgba(127, 181, 198, 0.18);
+  color: #e0f2fe;
+  background: rgba(30, 41, 59, 0.9);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.55s ease both;
+}
+
+.delay-1 {
+  animation-delay: 0.08s;
+}
+
+.delay-2 {
+  animation-delay: 0.16s;
+}
+
+.delay-3 {
+  animation-delay: 0.24s;
+}
+
+
+

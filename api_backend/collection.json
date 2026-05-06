@@ -1,0 +1,1272 @@
+{
+  "info": {
+    "name": "Gestion MT API",
+    "description": "CRUD APIs for Gestion MT with JWT Authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "ws_base_url",
+      "value": "ws://127.0.0.1:8000"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Obtain Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"your_username\",\n  \"password\": \"your_password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/token/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "token", ""]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', response.access);",
+                  "    pm.collectionVariables.set('refresh_token', response.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/token/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "token", "refresh", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"tech1\",\n  \"email\": \"tech1@company.com\",\n  \"password\": \"secure_password\",\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\",\n  \"role\": \"technicien\",\n  \"telephone\": \"+33612345678\",\n  \"image\": null,\n  \"groups\": [],\n  \"user_permissions\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"updateduser\",\n  \"email\": \"updated@example.com\",\n  \"password\": \"new_secure_password\",\n  \"first_name\": \"Updated\",\n  \"last_name\": \"User\",\n  \"role\": \"manager\",\n  \"telephone\": \"+33699999999\",\n  \"image\": null,\n  \"groups\": [],\n  \"user_permissions\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "item": [
+        {
+          "name": "List Clients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/clients/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom_complet\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"telephone\": \"123456789\",\n  \"adresse\": \"123 Main St\",\n  \"is_deleted\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Client",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/clients/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Client",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom_complet\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"telephone\": \"987654321\",\n  \"adresse\": \"456 Updated Street\",\n  \"is_deleted\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/clients/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Client",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/clients/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "clients", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories Materiel",
+      "item": [
+        {
+          "name": "List Categories Materiel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/categories-materiel/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "categories-materiel", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Category Materiel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Laptop\",\n  \"description\": \"Ordinateurs portables\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/categories-materiel/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "categories-materiel", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Category Materiel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/categories-materiel/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "categories-materiel", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Category Materiel",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Imprimante\",\n  \"description\": \"Peripheriques d'impression\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/categories-materiel/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "categories-materiel", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Category Materiel",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/categories-materiel/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "categories-materiel", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Materiels",
+      "item": [
+        {
+          "name": "List Materiels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/materiels/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "materiels", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Materiel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client\": 1,\n  \"type\": \"Laptop\",\n  \"marque\": \"Dell\",\n  \"modele\": \"XPS 13\",\n  \"numero_serie\": \"123ABC\",\n  \"etat\": \"Reçu\",\n  \"is_deleted\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/materiels/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "materiels", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Materiel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/materiels/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "materiels", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Materiel",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client\": 1,\n  \"type\": \"Laptop\",\n  \"marque\": \"Dell\",\n  \"modele\": \"XPS 13\",\n  \"numero_serie\": \"123ABC\",\n  \"etat\": \"En réparation\",\n  \"is_deleted\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/materiels/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "materiels", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Materiel",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/materiels/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "materiels", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Demande Maintenances",
+      "item": [
+        {
+          "name": "List Demande Maintenances",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/demande-maintenances/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-maintenances", ""]
+            }
+          }
+        },
+        {
+          "name": "List My Demande Maintenances",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/demande-maintenances/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-maintenances", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Demande Maintenance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"materiel\": 1,\n  \"manager\": 2,\n  \"priorite\": \"haute\",\n  \"statut\": \"en_attente\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/demande-maintenances/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-maintenances", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Demande Maintenance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/demande-maintenances/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-maintenances", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Demande Maintenance",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"materiel\": 1,\n  \"manager\": 2,\n  \"priorite\": \"moyenne\",\n  \"statut\": \"en_cours\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/demande-maintenances/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-maintenances", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Demande Maintenance",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/demande-maintenances/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-maintenances", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Interventions",
+      "item": [
+        {
+          "name": "List Interventions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/interventions/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "interventions", ""]
+            }
+          }
+        },
+        {
+          "name": "List My Interventions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/interventions/me/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "interventions", "me", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Intervention",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"demande\": 1,\n  \"technicien\": 1,\n  \"diagnostic\": \"Hard drive failure detected\",\n  \"solution_proposee\": \"Replace hard drive with new SSD\",\n  \"statut\": \"en_attente\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/interventions/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "interventions", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Intervention",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/interventions/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "interventions", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Intervention",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"demande\": 1,\n  \"technicien\": 1,\n  \"diagnostic\": \"Hard drive failure detected\",\n  \"solution_proposee\": \"SSD replaced successfully\",\n  \"date_debut\": \"2026-04-08T10:00:00Z\",\n  \"date_fin\": \"2026-04-08T23:59:59Z\",\n  \"statut\": \"termine\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/interventions/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "interventions", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Intervention",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/interventions/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "interventions", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fiche Reparations",
+      "item": [
+        {
+          "name": "List Fiche Reparations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/fiche-reparations/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "fiche-reparations", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Fiche Reparation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intervention\": 1,\n  \"description_panne\": \"Screen cracked\",\n  \"solution\": \"Replaced screen\",\n  \"cout_main_oeuvre\": 50.00,\n  \"confirmation\": false,\n  \"valide_manager\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/fiche-reparations/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "fiche-reparations", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Fiche Reparation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/fiche-reparations/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "fiche-reparations", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Fiche Reparation",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intervention\": 1,\n  \"description_panne\": \"Screen cracked\",\n  \"solution\": \"Replaced screen and battery\",\n  \"cout_main_oeuvre\": 75.00,\n  \"confirmation\": true,\n  \"valide_manager\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/fiche-reparations/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "fiche-reparations", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Fiche Reparation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/fiche-reparations/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "fiche-reparations", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pieces",
+      "item": [
+        {
+          "name": "List Pieces",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pieces/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pieces", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Piece",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Screen\",\n  \"categorie\": 1,\n  \"quantite_stock\": 10,\n  \"prix_unitaire\": 100.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pieces/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pieces", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Piece",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pieces/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pieces", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Piece",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Screen\",\n  \"categorie\": 1,\n  \"quantite_stock\": 5,\n  \"prix_unitaire\": 95.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/pieces/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pieces", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Piece",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pieces/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pieces", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Demande Pieces",
+      "item": [
+        {
+          "name": "List Demande Pieces",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/demande-pieces/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-pieces", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Demande Piece",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fiche\": 1,\n  \"piece\": 1,\n  \"quantite\": 1,\n  \"statut\": \"demandee\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/demande-pieces/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-pieces", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Demande Piece",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/demande-pieces/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-pieces", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Demande Piece",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fiche\": 1,\n  \"piece\": 1,\n  \"quantite\": 1,\n  \"statut\": \"approuvee\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/demande-pieces/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-pieces", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Demande Piece",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/demande-pieces/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "demande-pieces", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Factures",
+      "item": [
+        {
+          "name": "List Factures",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/factures/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "factures", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Facture",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intervention\": 1,\n  \"client\": 1,\n  \"montant_total\": 250.00,\n  \"est_payee\": false,\n  \"is_deleted\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/factures/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "factures", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Facture",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/factures/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "factures", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Facture",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intervention\": 1,\n  \"client\": 1,\n  \"montant_total\": 300.00,\n  \"est_payee\": true,\n  \"is_deleted\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/factures/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "factures", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Facture",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/factures/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "factures", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Paiements",
+      "item": [
+        {
+          "name": "List Paiements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/paiements/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "paiements", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Paiement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"facture\": 1,\n  \"montant\": 250.00,\n  \"mode_paiement\": \"cheque\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/paiements/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "paiements", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Paiement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/paiements/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "paiements", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Paiement",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"facture\": 1,\n  \"montant\": 200.00,\n  \"mode_paiement\": \"virement\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/paiements/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "paiements", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Paiement",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/paiements/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "paiements", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "List Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/messages/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messages", ""]
+            }
+          }
+        },
+        {
+          "name": "List Messages (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/messages/?page=1&page_size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messages", ""],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinataire\": 2,\n  \"objet\": \"Task update\",\n  \"contenu\": \"Work is done.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/messages/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messages", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Message",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/messages/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messages", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Message",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinataire\": 2,\n  \"objet\": \"Task update (edited)\",\n  \"contenu\": \"Updated message.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/messages/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messages", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Message",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/messages/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "messages", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "WebSocket (Messages)",
+      "item": [
+        {
+          "name": "Connect URL Example",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ws_base_url}}/ws/messages/?token={{access_token}}",
+              "host": ["{{ws_base_url}}"],
+              "path": ["ws", "messages", ""],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}"
+                }
+              ]
+            },
+            "description": "WebSocket endpoint with JWT query token. You can also pass Authorization: Bearer <token> in WS headers."
+          }
+        },
+        {
+          "name": "message.send Payload",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ws_base_url}}/ws/messages/",
+              "host": ["{{ws_base_url}}"],
+              "path": ["ws", "messages", ""]
+            },
+            "description": "Send over WS: {\"type\":\"message.send\",\"destinataire\":2,\"contenu\":\"...\",\"objet\":\"...\"}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Departments",
+      "item": [
+        {
+          "name": "List Departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/departments/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", ""]
+            }
+          }
+        },
+        {
+          "name": "Create Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom_dept\": \"IT Support\",\n  \"description\": \"Information Technology Support Department\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/departments/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", ""]
+            }
+          }
+        },
+        {
+          "name": "Retrieve Department",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/departments/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Department",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom_dept\": \"IT Operations\",\n  \"description\": \"IT Operations and Support\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/departments/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", "1", ""]
+            }
+          }
+        },
+        {
+          "name": "Delete Department",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/departments/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "departments", "1", ""]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
