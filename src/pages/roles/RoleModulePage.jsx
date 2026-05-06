@@ -231,7 +231,6 @@ function RoleModulePage() {
 
   const [rows, setRows] = useState([])
   const [readyInterventions, setReadyInterventions] = useState(new Set())
-  const [unlockedInterventions, setUnlockedInterventions] = useState(new Set())
   const [lookupData, setLookupData] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -428,22 +427,6 @@ function RoleModulePage() {
     return groupRequestedPieceRows(requestedPieces, availablePieces)
   }, [requestedPieces, availablePieces, moduleConfig?.key])
 
-  const interventionStats = useMemo(() => {
-    if (moduleConfig?.key !== 'interventions') return null;
-    
-    const stats = [
-      { key: 'termine', name: 'Terminées', value: rows.filter(i => i.statut === 'termine').length, color: '#10b981' },
-      { key: 'en_cours', name: 'En cours', value: rows.filter(i => i.statut === 'en_cours').length, color: '#3b82f6' },
-      { key: 'en_attente', name: 'En attente', value: rows.filter(i => i.statut === 'en_attente').length, color: '#f59e0b' },
-      { key: 'refuse', name: 'Annulées', value: rows.filter(i => i.statut === 'refuse').length, color: '#ef4444' }
-    ];
-    
-    const total = stats.reduce((sum, s) => sum + s.value, 0);
-    const termineVal = stats.find(d => d.key === 'termine')?.value || 0;
-    const resRate = total > 0 ? Math.round((termineVal / total) * 100) : 0;
-    
-    return { stats, total, resRate };
-  }, [rows, moduleConfig?.key]);
 
   const availableRecipients = useMemo(() => {
     const users = lookupData.users ?? []
