@@ -1,8 +1,9 @@
 import { BarChart3, RefreshCw, Activity, ShieldCheck, Wrench, Users, Monitor, Box, TrendingUp, AlertTriangle, Package, CheckCircle2, Clock, XCircle, ArrowUpRight, ClipboardList } from 'lucide-react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts'
+import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import {
@@ -49,6 +50,7 @@ const itemVariants = {
 }
 
 function RoleOverviewPage() {
+  const { t } = useTranslation()
   const { role, workspace } = useOutletContext()
   const navigate = useNavigate()
   const [counts, setCounts] = useState({})
@@ -65,20 +67,36 @@ function RoleOverviewPage() {
     const relevantModules = (workspace.modules || []).filter(m => m.key !== 'messages') 
 
     const requests = relevantModules.map(async (module) => {
-      const service = entityServices[module.serviceKey]
+      const serviceKeys = Array.isArray(module.serviceKeys) && module.serviceKeys.length
+        ? module.serviceKeys
+        : module.serviceKey
+          ? [module.serviceKey]
+          : []
 
-      if (!service) {
-        return { key: module.key, count: 0, error: 'Service not configured' }
+      if (serviceKeys.length === 0) {
+        return { key: module.key, count: 0, error: t('Service not configured') }
       }
 
       try {
-        const rows = await service.list()
-        return { key: module.key, count: rows.length, error: '' }
+        const rowsList = await Promise.all(
+          serviceKeys.map(async (serviceKey) => {
+            const service = entityServices[serviceKey]
+
+            if (!service || typeof service.list !== 'function') {
+              throw new Error(`${serviceKey} service not configured`)
+            }
+
+            return service.list()
+          }),
+        )
+
+        const count = rowsList.reduce((sum, rows) => sum + (Array.isArray(rows) ? rows.length : 0), 0)
+        return { key: module.key, count, error: '' }
       } catch (error) {
         return {
           key: module.key,
           count: 0,
-          error: extractApiErrorMessage(error, 'Load failed'),
+          error: extractApiErrorMessage(error, t('Load failed')),
         }
       }
     })
@@ -152,7 +170,7 @@ function RoleOverviewPage() {
         }))
         setMonthlyData(formattedMonthlyData)
       } catch (err) {
-        console.error('Failed to load intervention stats:', err)
+        console.error(t('Failed to load intervention stats:'), err)
       }
     }
 
@@ -167,7 +185,7 @@ function RoleOverviewPage() {
         ])
         setStockData({ pieces: piecesData, demandePieces: demandePiecesData, loaded: true })
       } catch (err) {
-        console.error('Failed to load stock data:', err)
+        console.error(t('Failed to load stock data:'), err)
       }
     }
 
@@ -182,10 +200,10 @@ function RoleOverviewPage() {
         ])
         setRecepData({ clients: clientsData, materiels: materielsData, demandes: demandesData, factures: facturesData, loaded: true })
       } catch (err) {
-        console.error('Failed to load receptioniste data:', err)
+        console.error(t('Failed to load receptioniste data:'), err)
       }
     }
-  }, [workspace.modules, role])
+  }, [workspace.modules, role, t])
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -216,7 +234,6 @@ function RoleOverviewPage() {
     const totalClients     = clients.length
     const totalMateriels   = materiels.length
     const pendingDemandes  = demandes.filter(d => d.statut === 'en_attente').length
-    const totalFactures    = factures.length
     const revenue          = factures.reduce((s, f) => s + (Number(f.montant_total) || 0), 0)
     const unpaid           = factures.filter(f => !f.est_payee).length
 
@@ -261,7 +278,7 @@ function RoleOverviewPage() {
         <motion.header variants={itemVariants} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-slate-100">Dashboard Overview</h1>
+              <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-slate-100">{t('Dashboard Overview')}</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gérez les clients, matériels et demandes de maintenance.</p>
             </div>
           </div>
@@ -331,16 +348,12 @@ function RoleOverviewPage() {
               <Badge className="border-indigo-200 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2">Cette année</Badge>
             </CardHeader>
             <CardContent className="pt-0 px-2">
-              <div className="h-[240px]">
+              <div className="h-60">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthlyDemandes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barSize={18}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} dy={8} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                    <Tooltip
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', fontSize: '11px', fontWeight: 600 }}
-                      cursor={{ fill: '#f1f5f9', radius: 6 }}
-                    />
                     <Bar dataKey="count" name="Demandes" fill="#6366f1" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -355,13 +368,12 @@ function RoleOverviewPage() {
               <CardDescription>Répartition par état</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-4 pt-2">
-              <div className="relative w-[150px] h-[150px]">
+              <div className="relative w-37.5 h-37.5">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={materielStats.length ? materielStats : [{name:'Aucun',value:1,color:'#e2e8f0'}]} cx="50%" cy="50%" innerRadius={46} outerRadius={65} paddingAngle={3} dataKey="value">
                       {(materielStats.length ? materielStats : [{name:'Aucun',value:1,color:'#e2e8f0'}]).map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', fontSize: '11px' }} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -451,7 +463,7 @@ function RoleOverviewPage() {
 
         {/* Bottom summary */}
         <motion.div variants={itemVariants}>
-          <Card className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-900/20 dark:to-violet-900/20 border-indigo-100 dark:border-indigo-800/30 shadow-sm rounded-2xl">
+          <Card className="bg-linear-to-r from-indigo-50 to-violet-50 dark:from-indigo-900/20 dark:to-violet-900/20 border-indigo-100 dark:border-indigo-800/30 shadow-sm rounded-2xl">
             <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
               <div className="flex flex-wrap gap-3">
                 <Badge className="border-indigo-200 bg-white/80 text-indigo-700 px-3 py-1 font-semibold">{totalClients} clients enregistrés</Badge>
@@ -516,7 +528,7 @@ function RoleOverviewPage() {
     return (
       <motion.div initial="hidden" animate="show" variants={containerVariants} className="space-y-6 relative">
         {/* Background glow */}
-        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-gradient-to-br from-emerald-500/20 via-transparent to-transparent blur-3xl opacity-20 pointer-events-none -z-10" />
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-linear-to-br from-emerald-500/20 via-transparent to-transparent blur-3xl opacity-20 pointer-events-none -z-10" />
 
         {/* Header */}
         <motion.header variants={itemVariants} className="glass-panel p-6 shadow-sm border border-slate-200 dark:border-slate-700/50 relative overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-900">
@@ -538,7 +550,7 @@ function RoleOverviewPage() {
 
         {/* KPI Cards */}
         <motion.div variants={containerVariants} className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          {kpiCards.map((card, idx) => {
+          {kpiCards.map((card) => {
             const c = colorMap[card.color]
             const Icon = card.icon
             return (
@@ -562,7 +574,7 @@ function RoleOverviewPage() {
                       </span>
                       <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                        <span className={`${c.text} text-[9px] uppercase tracking-wider`}>LIVE</span>
+                        <span className={`${c.text} text-[9px] uppercase tracking-wider`}>{t('LIVE')}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -585,7 +597,7 @@ function RoleOverviewPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-2 px-2">
-              <div className="h-[260px] w-full">
+              <div className="h-65 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={stockMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -597,7 +609,6 @@ function RoleOverviewPage() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} dy={8} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px' }} />
                     <Area type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorStockChef)" dot={{ r: 3.5, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -612,13 +623,12 @@ function RoleOverviewPage() {
               <CardDescription>Répartition par statut</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-5 pt-2">
-              <div className="relative w-[160px] h-[160px]">
+              <div className="relative w-40 h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={demandePieStats} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={4} dataKey="value">
                       {demandePieStats.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '10px', border: 'none', fontSize: '11px' }} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -764,17 +774,17 @@ function RoleOverviewPage() {
       className="space-y-6 relative"
     >
       {/* Role specific abstract background glow */}
-      <div className={`absolute -top-40 -left-40 w-96 h-96 rounded-full bg-gradient-to-br ${bgGradient} blur-3xl opacity-20 pointer-events-none -z-10`} />
+      <div className={`absolute -top-40 -left-40 w-96 h-96 rounded-full bg-linear-to-br ${bgGradient} blur-3xl opacity-20 pointer-events-none -z-10`} />
 
-      <motion.header variants={itemVariants} className="glass-panel p-6 shadow-sm border border-slate-200 dark:border-slate-700/50 relative overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-900">
-        <div className="absolute right-0 top-0 bottom-0 w-64 bg-gradient-to-l from-current opacity-5 pointer-events-none" />
+      <motion.header variants={itemVariants} className="glass-panel p-5 sm:p-6 shadow-sm border border-slate-200 dark:border-slate-700/50 relative overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-900">
+        <div className="absolute right-0 top-0 bottom-0 w-64 bg-linear-to-l from-current opacity-5 pointer-events-none" />
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 relative z-10">
           <div className="flex items-center gap-4">
             <div className={`p-4 rounded-2xl ${workspace.iconClass} hidden sm:flex`}>
               <RoleHeroIcon className="w-8 h-8" />
             </div>
             <div>
-              <h1 className="font-display text-3xl font-bold text-slate-900 dark:text-slate-100 capitalize flex items-center gap-2">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 capitalize flex flex-wrap items-center gap-2 leading-tight">
                 {workspace.title}
                 <Badge className={workspace.badgeClass}>{role}</Badge>
               </h1>
@@ -805,7 +815,7 @@ function RoleOverviewPage() {
                       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                         {module.label}
                       </p>
-                      <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Total Records</h3>
+                      <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">{t('Total Records')}</h3>
                     </div>
                     <div className={`p-3 rounded-xl ${workspace.iconClass} bg-opacity-10 dark:bg-opacity-20 shadow-inner group-hover:rotate-12 transition-transform duration-500`}>
                       <Icon className="h-5 w-5" />
@@ -827,12 +837,12 @@ function RoleOverviewPage() {
                       {hasError ? (
                         <>
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                          <span className="text-rose-600 dark:text-rose-400">ERROR</span>
+                          <span className="text-rose-600 dark:text-rose-400">{t('ERROR')}</span>
                         </>
                       ) : (
                         <>
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span className="text-emerald-600 dark:text-emerald-400 text-[9px] uppercase tracking-wider">SYNCED</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 text-[9px] uppercase tracking-wider">{t('SYNCED')}</span>
                         </>
                       )}
                     </div>
@@ -840,7 +850,7 @@ function RoleOverviewPage() {
 
                   <div className="mt-4 pt-4 border-t border-slate-50 dark:border-white/5 flex items-center justify-between">
                     <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 italic">
-                      Real-time analytics
+                      {t('Real-time analytics')}
                     </span>
                     <motion.div 
                       whileHover={{ x: 3 }}
@@ -863,8 +873,8 @@ function RoleOverviewPage() {
               <CardTitle className="text-xl font-bold text-slate-800 dark:text-slate-100">Interventions par statut</CardTitle>
               <CardDescription>Visualisation en temps réel du flux opérationnel</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col md:flex-row items-center justify-center p-6 gap-8 min-h-[300px]">
-              <div className="relative w-full max-w-[250px] aspect-square flex items-center justify-center">
+            <CardContent className="flex flex-col md:flex-row items-center justify-center p-6 gap-8 min-h-75">
+              <div className="relative w-full max-w-62.5 aspect-square flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -880,15 +890,6 @@ function RoleOverviewPage() {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        borderRadius: '12px', 
-                        border: 'none', 
-                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                        fontSize: '12px',
-                        fontWeight: '600'
-                      }}
-                    />
                   </PieChart>
                 </ResponsiveContainer>
                 
@@ -900,7 +901,7 @@ function RoleOverviewPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4 w-full md:w-auto min-w-[200px]">
+              <div className="flex flex-col gap-4 w-full md:w-auto min-w-50">
                 {chartData.map((entry, index) => (
                   <div key={index} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
@@ -971,7 +972,7 @@ function RoleOverviewPage() {
               </select>
             </CardHeader>
             <CardContent className="pt-4 px-2 sm:px-6">
-              <div className="h-[300px] w-full">
+              <div className="h-75 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -993,15 +994,6 @@ function RoleOverviewPage() {
                       tickLine={false} 
                       tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }}
                     />
-                    <Tooltip 
-                      contentStyle={{ 
-                        borderRadius: '12px', 
-                        border: 'none', 
-                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                        fontSize: '12px',
-                        fontWeight: '600'
-                      }}
-                    />
                     <Area 
                       type="monotone" 
                       dataKey="count" 
@@ -1021,23 +1013,27 @@ function RoleOverviewPage() {
       )}
 
       <motion.div variants={itemVariants}>
-        <Card className="bg-slate-50 dark:bg-slate-900 dark:border-slate-800 border-slate-200 dark:border-slate-700 shadow-sm">
+        <Card className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm">
           <CardHeader className="pb-4">
             <CardTitle className="text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Activity className="h-5 w-5" /> Global Operations
+              <Activity className="h-5 w-5" /> {t('Global Operations')}
             </CardTitle>
-            <CardDescription className="dark:text-slate-400">Total operational volume tracked for {role}</CardDescription>
+            <CardDescription className="dark:text-slate-400">
+              {t('Total operational volume tracked for {{role}}', { role })}
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 dark:border-white/5 pt-4">
             <div className="flex flex-wrap items-center gap-3">
-              <Badge className={`px-3 py-1 ${workspace.badgeClass}`}>Total tracked records: {totalRecords}</Badge>
-              <Badge variant="outline" className="px-3 py-1 border-slate-300 dark:border-slate-600 dark:border-white/10 dark:text-slate-800">
-                Active Modules: {relevantModules.length}
+              <Badge className={`px-3 py-1 ${workspace.badgeClass}`}>
+                {t('Total tracked records: {{count}}', { count: totalRecords })}
+              </Badge>
+              <Badge variant="outline" className="px-3 py-1 border-slate-300 dark:border-white/10 dark:text-slate-800">
+                {t('Active Modules: {{count}}', { count: relevantModules.length })}
               </Badge>
             </div>
             <span className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium">
               <BarChart3 className="h-4 w-4" />
-              Use the sidebar to explore data grids
+              {t('Use the sidebar to explore data grids')}
             </span>
           </CardContent>
         </Card>

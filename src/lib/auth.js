@@ -10,6 +10,7 @@ export const ROLE_ROUTES = {
   technicien: '/technicien',
   chefstock: '/chefstock',
   receptioniste: '/receptioniste',
+  fournisseur: '/fournisseur',
 }
 
 const ROLE_ALIAS = {
@@ -24,6 +25,8 @@ const ROLE_ALIAS = {
   stockmanager: 'chefstock',
   receptioniste: 'receptioniste',
   receptionist: 'receptioniste',
+  fournisseur: 'fournisseur',
+  supplier: 'fournisseur',
 }
 
 function normalizeRole(value) {

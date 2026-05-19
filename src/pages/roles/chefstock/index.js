@@ -1,0 +1,6 @@
+export { default as ChefStockOverviewPage } from './ChefStockOverviewPage'
+export { default as AchatPiecePage } from './AchatPiecePage'
+export { default as FournisseursPage } from './FournisseursPage'
+export { default as CommandesPiecesPage } from './CommandesPiecesPage'
+export { default as PrixFournisseursPage } from './PrixFournisseursPage'
+export { default as DemandesPiecesAchatPage } from './DemandesPiecesAchatPage'

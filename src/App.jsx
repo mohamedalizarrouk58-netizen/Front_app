@@ -9,12 +9,23 @@ import RoleModulePage from './pages/roles/RoleModulePage'
 import RoleOverviewPage from './pages/roles/RoleOverviewPage'
 import MessagesPage from './pages/shared/MessagesPage'
 import {
+  ChefStockOverviewPage,
+  AchatPiecePage,
+  FournisseursPage,
+  CommandesPiecesPage,
+  PrixFournisseursPage,
+  DemandesPiecesAchatPage,
+} from './pages/roles/chefstock'
+import {
   ROLE_ROUTES,
   clearAuth,
   getRouteForRole,
   getStoredAuth,
   isAuthValid,
 } from './lib/auth'
+
+import FournisseurLayout from './pages/roles/fournisseur/FournisseurLayout'
+import FournisseurDashboardPage from './pages/roles/fournisseur/FournisseurDashboardPage'
 
 function ProtectedRoute({ children, allowedRole }) {
   const auth = getStoredAuth()
@@ -66,6 +77,7 @@ function App() {
         }
       >
         <Route index element={<AdminOverviewPage />} />
+        <Route path="achat-piece" element={<AchatPiecePage rolePath="admin" />} />
         <Route path="messages" element={<MessagesPage />} />
         <Route path="entities/:entityKey" element={<EntityCrudPage />} />
       </Route>
@@ -79,6 +91,10 @@ function App() {
         }
       >
         <Route index element={<RoleOverviewPage />} />
+        <Route path="achat-piece" element={<AchatPiecePage rolePath="administrateur" />} />
+        <Route path="fournisseurs" element={<FournisseursPage />} />
+        <Route path="commandes" element={<CommandesPiecesPage />} />
+        <Route path="prix" element={<PrixFournisseursPage />} />
         <Route path="messages" element={<MessagesPage />} />
         <Route path="modules/:moduleKey" element={<RoleModulePage />} />
       </Route>
@@ -117,9 +133,14 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<RoleOverviewPage />} />
+        <Route index element={<ChefStockOverviewPage />} />
+        <Route path="achat-piece" element={<AchatPiecePage />} />
+        <Route path="suivi-achat" element={<DemandesPiecesAchatPage />} />
         <Route path="messages" element={<MessagesPage />} />
         <Route path="modules/:moduleKey" element={<RoleModulePage />} />
+        <Route path="fournisseurs" element={<FournisseursPage />} />
+        <Route path="commandes" element={<CommandesPiecesPage />} />
+        <Route path="prix" element={<PrixFournisseursPage />} />
       </Route>
 
       <Route
@@ -133,6 +154,18 @@ function App() {
         <Route index element={<RoleOverviewPage />} />
         <Route path="messages" element={<MessagesPage />} />
         <Route path="modules/:moduleKey" element={<RoleModulePage />} />
+      </Route>
+
+      <Route
+        path={ROLE_ROUTES.fournisseur}
+        element={
+          <ProtectedRoute allowedRole="fournisseur">
+            <FournisseurLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<FournisseurDashboardPage />} />
+        <Route path="messages" element={<MessagesPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

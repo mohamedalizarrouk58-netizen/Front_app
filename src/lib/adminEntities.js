@@ -11,6 +11,7 @@ import {
   Users,
   Wrench,
   Tags,
+  Package,
 } from 'lucide-react'
 
 export const ADMIN_ENTITIES = [
@@ -41,7 +42,7 @@ export const ADMIN_ENTITIES = [
         label: 'Role',
         type: 'select',
         required: true,
-        options: ['administrateur', 'admin', 'manager', 'technicien', 'chefstock', 'receptioniste'],
+        options: ['administrateur', 'admin', 'manager', 'technicien', 'chefstock', 'receptioniste', 'fournisseur'],
       },
       { key: 'first_name', label: 'First Name', type: 'text' },
       { key: 'last_name', label: 'Last Name', type: 'text' },
@@ -211,6 +212,14 @@ export const ADMIN_ENTITIES = [
     ],
   },
   {
+    key: 'achat-piece',
+    label: 'Achat Pièce',
+    icon: Package,
+    serviceKey: 'fournisseurs',
+    columns: ['id', 'bundle'],
+    fields: [],
+  },
+  {
     key: 'fiche-reparations',
     label: 'Fiche Reparations',
     icon: Settings,
@@ -312,7 +321,7 @@ export const ADMIN_ENTITIES = [
       },
       { key: 'montant_total', label: 'Total Amount', type: 'number', required: true },
       { key: 'date_facture', label: 'Invoice Date', type: 'date' },
-      { key: 'est_payee', label: 'Paid', type: 'boolean' },
+      { key: 'est_payee', label: 'Paiement', type: 'boolean' },
       { key: 'is_deleted', label: 'Soft Deleted', type: 'boolean' },
     ],
   },
@@ -379,6 +388,7 @@ export const ADMIN_DASHBOARD_ENDPOINTS = [
     icon: ClipboardList,
   },
   { key: 'interventions', serviceKey: 'interventions', label: 'Interventions', icon: Wrench },
+  { key: 'achat-piece', serviceKey: 'fournisseurs', label: 'Achat Pièce', icon: Package },
   { key: 'pieces', serviceKey: 'pieces', label: 'Stock Pièce', icon: Boxes },
   { key: 'demande-pieces', serviceKey: 'demande-pieces', label: 'Pièce Demandée', icon: ClipboardList },
   { key: 'factures', serviceKey: 'factures', label: 'Factures', icon: CircleDollarSign },

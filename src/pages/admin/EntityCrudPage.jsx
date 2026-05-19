@@ -1,6 +1,7 @@
-import { Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import {
@@ -90,6 +91,7 @@ function groupPieceRows(rows) {
 }
 
 function EntityCrudPage() {
+  const { t } = useTranslation()
   const { entityKey } = useParams()
   const navigate = useNavigate()
 
@@ -127,11 +129,11 @@ function EntityCrudPage() {
       const list = await entityService.list()
       setRows(list)
     } catch (requestError) {
-      setError(extractApiErrorMessage(requestError, `Failed to load ${entity.label}.`))
+      setError(extractApiErrorMessage(requestError, t('Failed to load {{entity}}.', { entity: entity.label })))
     } finally {
       setLoading(false)
     }
-  }, [entity, entityService])
+  }, [entity, entityService, t])
 
   const loadLookups = useCallback(async () => {
     if (!entity) {
@@ -296,7 +298,7 @@ function EntityCrudPage() {
       await loadRows()
       closeDrawer()
     } catch (requestError) {
-      setSaveError(extractApiErrorMessage(requestError, 'Unable to save changes.'))
+      setSaveError(extractApiErrorMessage(requestError, t('Unable to save changes.')))
     } finally {
       setSaving(false)
     }
@@ -313,7 +315,7 @@ function EntityCrudPage() {
       await entityService.remove(rowId)
       await loadRows()
     } catch (requestError) {
-      setError(extractApiErrorMessage(requestError, 'Unable to delete record.'))
+      setError(extractApiErrorMessage(requestError, t('Unable to delete record.')))
     } finally {
       setDeletingId(null)
     }
@@ -327,19 +329,31 @@ function EntityCrudPage() {
     <div className="space-y-4">
       <header className="glass-panel animate-rise p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="flex items-start gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigate('/admin')}
+              aria-label={t('Go back')}
+              className="shrink-0 border-slate-200 dark:border-slate-700 shadow-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+
+            <div>
             <h1 className="font-display text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
               {entity.label}
             </h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 sm:text-base">
-              Full CRUD management for {entity.label.toLowerCase()}.
+              {t('Full CRUD management for {{entity}}.', { entity: entity.label.toLowerCase() })}
             </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <Button onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
-              New Record
+              {t('New Record')}
             </Button>
           </div>
         </div>
@@ -348,7 +362,7 @@ function EntityCrudPage() {
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-300" />
           <input
             className="h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 pl-9 pr-3 text-sm outline-none ring-[#145f7a]/40 transition focus:ring-2"
-            placeholder={`Search ${entity.label}`}
+            placeholder={t('Search {{entity}}', { entity: entity.label })}
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
           />
@@ -358,9 +372,9 @@ function EntityCrudPage() {
       <Card className="animate-rise delay-1 border-0 shadow-none bg-transparent">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">{entity.label} Records</h2>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">{t('{{entity}} Records', { entity: entity.label })}</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {filteredRows.length} / {rows.length} shown
+              {t('{{shown}} / {{total}} shown', { shown: filteredRows.length, total: rows.length })}
             </p>
           </div>
         </div>
@@ -396,9 +410,9 @@ function EntityCrudPage() {
                       row.statut === 'en_cours' ? 'border-blue-300 bg-blue-50/50 dark:bg-blue-900/20' :
                       'border-slate-100 bg-transparent'
                     }`}>
-                      <div className="flex flex-1 flex-wrap items-center gap-4">
+                      <div className="table-row-grid flex-1 w-full" style={{ '--row-grid-cols': `64px repeat(${entity.columns.length - 1}, minmax(0, 1fr))` }}>
                         {entity.columns.map((column, colIndex) => (
-                          <div key={`${column}-${group.key}-${rowIndex}`} className={`flex flex-col ${colIndex === 0 ? 'w-16 shrink-0' : 'min-w-30 flex-1'}`}>
+                          <div key={`${column}-${group.key}-${rowIndex}`} className="flex flex-col min-w-0">
                             <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{column.replace(/_/g, ' ')}</span>
 
                             {colIndex === 0 ? (
@@ -427,7 +441,7 @@ function EntityCrudPage() {
                         ))}
                       </div>
 
-                      <div className="mt-3 flex items-center gap-2 sm:mt-0 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto">
+                      <div className="mt-3 flex items-center justify-end gap-2 sm:mt-0 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto sm:w-[200px]">
                         <Button size="sm" variant="ghost" className="h-8 px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
                           <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
                         </Button>
@@ -455,9 +469,9 @@ function EntityCrudPage() {
                 row.statut === 'en_cours' ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/40' :
                 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/25'
               }`}>
-                <div className="flex flex-1 flex-wrap items-center gap-3">
+                <div className="table-row-grid flex-1 w-full" style={{ '--row-grid-cols': `64px repeat(${entity.columns.length - 1}, minmax(0, 1fr))` }}>
                   {entity.columns.map((column, colIndex) => (
-                    <div key={`${column}-${rowIndex}`} className={`flex flex-col ${colIndex === 0 ? 'w-16 shrink-0' : 'min-w-30 flex-1'}`}>
+                    <div key={`${column}-${rowIndex}`} className="flex flex-col min-w-0">
                       <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{column.replace(/_/g, ' ')}</span>
 
                       {colIndex === 0 ? (
@@ -486,7 +500,7 @@ function EntityCrudPage() {
                   ))}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 self-end sm:self-auto mt-2 sm:mt-0">
+                <div className="flex shrink-0 items-center justify-end gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 self-end sm:self-auto mt-2 sm:mt-0 sm:w-[200px]">
                   <Button size="sm" variant="ghost" className="h-8 px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
                     <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
                   </Button>
@@ -520,9 +534,9 @@ function EntityCrudPage() {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="font-display text-xl font-semibold text-slate-900 dark:text-slate-100">
-                    {drawerMode === 'create' ? 'Create' : 'Edit'} {entity.label}
+                    {drawerMode === 'create' ? t('Create') : t('Edit')} {entity.label}
                   </h2>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">Fill the fields and save changes.</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{t('Fill the fields and save changes.')}</p>
                 </div>
 
                 <Button variant="ghost" size="sm" onClick={closeDrawer}>
@@ -583,7 +597,7 @@ function EntityCrudPage() {
                             required={field.required && !isReadOnly}
                             disabled={isReadOnly}
                           >
-                            <option value="">Select...</option>
+                            <option value="">{t('Select...')}</option>
                             {field.options?.map((optionValue) => (
                               <option key={optionValue} value={optionValue}>
                                 {optionValue}
@@ -605,9 +619,9 @@ function EntityCrudPage() {
                             onChange={(event) => handleFieldChange(field.key, event.target.value)}
                             disabled={isReadOnly}
                           >
-                            <option value="">Select...</option>
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
+                            <option value="">{t('Select...')}</option>
+                            <option value="true">{t('Yes')}</option>
+                            <option value="false">{t('No')}</option>
                           </select>
                         </label>
                       )
@@ -631,7 +645,7 @@ function EntityCrudPage() {
                             required={field.required && !isReadOnly}
                             disabled={isReadOnly}
                           >
-                            <option value="">Select...</option>
+                            <option value="">{t('Select...')}</option>
                             {options.map((option) => {
                               const valueKey = field.lookup.valueKey
                               const labelKey = field.lookup.labelKey
@@ -682,13 +696,13 @@ function EntityCrudPage() {
 
               <div className="mt-4 flex items-center gap-2">
                 <Button onClick={saveForm} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save'}
+                  {saving ? t('Saving...') : t('Save')}
                 </Button>
                 <Button variant="outline" onClick={closeDrawer}>
-                  Cancel
+                  {t('Cancel')}
                 </Button>
                 <Badge className="ml-auto border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-900/70 text-slate-600 dark:text-slate-400">
-                  {drawerMode === 'create' ? 'Create mode' : 'Edit mode'}
+                  {drawerMode === 'create' ? t('Create mode') : t('Edit mode')}
                 </Badge>
               </div>
             </div>

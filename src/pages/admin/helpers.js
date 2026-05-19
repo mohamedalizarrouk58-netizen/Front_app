@@ -1,3 +1,5 @@
+import i18n from '../../i18n'
+
 export function normalizeListPayload(payload) {
   if (Array.isArray(payload)) {
     return payload
@@ -44,7 +46,7 @@ export function displayValue(value) {
   }
 
   if (typeof value === 'boolean') {
-    return value ? 'Yes' : 'No'
+    return value ? i18n.t('Yes') : i18n.t('No')
   }
 
   if (typeof value === 'string') {

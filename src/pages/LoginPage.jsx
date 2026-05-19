@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { getRouteForRole, loginWithCredentials } from '../lib/auth'
@@ -9,6 +10,7 @@ import { getRouteForRole, loginWithCredentials } from '../lib/auth'
 import logo from '../assets/logo_s.png'
 
 function LoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -66,7 +68,7 @@ function LoginPage() {
                 transition={{ delay: 0.6, duration: 0.5 }}
                 className="text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight capitalize"
               >
-                Welcome, {welcomeData.username}!
+                {t('Welcome, {{name}}!', { name: welcomeData.username })}
               </motion.h1>
               
               <motion.div
@@ -82,7 +84,9 @@ function LoginPage() {
                 transition={{ delay: 1.2, duration: 0.5 }}
                 className="text-slate-400 dark:text-slate-300 text-lg uppercase tracking-widest text-center"
               >
-                Preparing your {welcomeData.role} dashboard...
+                {t('Preparing your {{role}} dashboard...', {
+                  role: t(`role.${welcomeData.role}`, { defaultValue: welcomeData.role }),
+                })}
               </motion.p>
               
               <motion.div
@@ -120,18 +124,18 @@ function LoginPage() {
               <img src={logo} alt="Condori Logo" className="h-10 object-contain" />
            </div>
            
-           <a href="/" className="flex items-center gap-2 text-slate-600 dark:text-white/80 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium">
-              <span>←</span> Back to Website
-           </a>
+              <a href="/" className="flex items-center gap-2 text-slate-600 dark:text-white/80 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium">
+                <span>←</span> {t('Back to Website')}
+              </a>
         </div>
 
         <div className="max-w-2xl mb-8">
            <h1 className="text-5xl font-bold text-slate-900 dark:text-slate-100 mb-6 leading-[1.1] tracking-tight">
               Conseil, Développement.<br/>Organisation Intégrée.
            </h1>
-           <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed max-w-xl">
-              From quick maintenance requests to full-length interventions, our powerful platform lets you work seamlessly across your organization.
-           </p>
+            <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed max-w-xl">
+              {t('From quick maintenance requests to full-length interventions, our powerful platform lets you work seamlessly across your organization.')}
+            </p>
            
            <div className="flex gap-2 mt-10">
               <div className="h-1.5 w-8 bg-slate-900 dark:bg-white rounded-full"></div>
@@ -149,32 +153,32 @@ function LoginPage() {
          </div>
 
          <div className="mb-10">
-            <h2 className="text-[32px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Welcome Back!</h2>
+            <h2 className="text-[32px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('Welcome Back!')}</h2>
             <p className="text-slate-500 dark:text-slate-400 mt-2 text[15px]">Connectez-vous pour commencer à gérer vos opérations en toute simplicité.</p>
          </div>
 
          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
-               <label className="block text-sm font-bold text-slate-900 dark:text-slate-100">User / Email</label>
+              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100">{t('User / Email')}</label>
                <Input
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
                   className="h-14 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-900 text-base px-4 transition-all"
-                  placeholder="Input your username"
+                placeholder={t('Input your username')}
                   autoComplete="username"
                   required
                />
             </div>
 
             <div className="space-y-2">
-               <label className="block text-sm font-bold text-slate-900 dark:text-slate-100">Password</label>
+               <label className="block text-sm font-bold text-slate-900 dark:text-slate-100">{t('Password')}</label>
                <div className="relative">
                   <Input
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     className="h-14 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:border-slate-900 text-base pl-4 pr-12 transition-all"
-                    placeholder="Input your password"
+                    placeholder={t('Input your password')}
                     autoComplete="current-password"
                     required
                   />
@@ -196,12 +200,12 @@ function LoginPage() {
                        <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                      </svg>
                   </div>
-                  <span className="text-[14px] text-slate-500 dark:text-slate-400 font-medium group-hover:text-slate-700 dark:text-slate-300 transition-colors">Remember Me</span>
+                  <span className="text-[14px] text-slate-500 dark:text-slate-400 font-medium group-hover:text-slate-700 dark:text-slate-300 transition-colors">{t('Remember Me')}</span>
                </label>
                
-               <a href="#" className="text-[14px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors">
-                  Forgot Password?
-               </a>
+              <a href="#" className="text-[14px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 transition-colors">
+                {t('Forgot Password?')}
+              </a>
             </div>
 
             {error && (
@@ -224,9 +228,9 @@ function LoginPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Signing in...
+                      {t('Signing in...')}
                  </div>
-              ) : "Login"}
+                    ) : t('Login')}
             </Button>
          </form>
 

@@ -8,6 +8,8 @@ import {
   Users,
   Wrench,
   Tags,
+  Truck,
+  Package,
 } from 'lucide-react'
 
 export const ROLE_WORKSPACES = {
@@ -55,6 +57,14 @@ export const ROLE_WORKSPACES = {
         serviceKey: 'interventions',
         icon: Wrench,
         columns: ['id', 'demande', 'technicien', 'diagnostic', 'statut', 'date_debut', 'date_fin'],
+        permissions: { create: true, update: true, delete: true },
+      },
+      {
+        key: 'achat-piece',
+        label: 'Achat Pièce',
+        serviceKeys: ['fournisseurs', 'commandes-pieces', 'prix-fournisseurs'],
+        icon: Package,
+        description: 'Regroupe les fournisseurs, commandes de pièces et prix fournisseurs.',
         permissions: { create: true, update: true, delete: true },
       },
     ],
@@ -189,6 +199,14 @@ export const ROLE_WORKSPACES = {
         editableFields: ['statut'],
       },
       {
+        key: 'achat-piece',
+        label: 'Achat Pièce',
+        serviceKeys: ['fournisseurs', 'commandes-pieces', 'prix-fournisseurs'],
+        icon: Package,
+        description: 'Regroupe les fournisseurs, les commandes de pièces et les prix fournisseurs.',
+        permissions: { create: true, update: true, delete: true },
+      },
+      {
         key: 'messages',
         label: 'Messages',
         serviceKey: 'messages',
@@ -262,5 +280,21 @@ export function roleDashboardPath(role) {
 }
 
 export function roleModulePath(role, moduleKey) {
+  if ((role === 'chefstock' || role === 'administrateur') && moduleKey === 'achat-piece') {
+    return `/${role}/achat-piece`
+  }
+
+  if (role === 'chefstock') {
+    const chefstockRoutes = {
+      fournisseurs: '/chefstock/fournisseurs',
+      'commandes-pieces': '/chefstock/commandes',
+      'prix-fournisseurs': '/chefstock/prix',
+    }
+
+    if (chefstockRoutes[moduleKey]) {
+      return chefstockRoutes[moduleKey]
+    }
+  }
+
   return `/${role}/modules/${moduleKey}`
 }

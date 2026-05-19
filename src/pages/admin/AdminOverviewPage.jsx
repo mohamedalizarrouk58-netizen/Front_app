@@ -1,212 +1,339 @@
-import { Activity, Bell, RefreshCw, BarChart3 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Badge } from '../../components/ui/badge'
-import { Button } from '../../components/ui/button'
+import React, { useState, useEffect } from 'react';
 import {
-  Card,
-  CardContent,
-} from '../../components/ui/card'
-import { ADMIN_DASHBOARD_ENDPOINTS, adminEntityPath } from '../../lib/adminEntities'
-import { extractApiErrorMessage } from '../../lib/api'
-import { entityServices } from '../../services/entities'
+  ClipboardList,
+  Wrench,
+  FileText,
+  Receipt,
+  Users,
+  ShieldCheck,
+  Building2,
+  TrendingUp,
+  Activity,
+  RefreshCw
+} from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { motion } from 'framer-motion';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, Cell } from 'recharts';
+import { entityServices } from '../../services/entities';
+import { extractApiErrorMessage } from '../../lib/api';
 
-function AdminOverviewPage() {
-  const navigate = useNavigate()
-  const [counts, setCounts] = useState({})
-  const [errors, setErrors] = useState({})
-  const [loading, setLoading] = useState(false)
-  const [syncedAt, setSyncedAt] = useState('')
+const AdminOverviewPage = () => {
+  const [dataCounts, setDataCounts] = useState({
+    users: 0,
+    departments: 0,
+    demandes: 0,
+    interventions: 0,
+    fiches: 0,
+    factures: 0
+  });
+  const [chartData, setChartData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const loadCounts = useCallback(async () => {
-    setLoading(true)
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [
+        usersRes,
+        departmentsRes,
+        demandesRes,
+        interventionsRes,
+        fichesRes,
+        facturesRes
+      ] = await Promise.allSettled([
+        entityServices.users.list(),
+        entityServices.departments.list(),
+        entityServices['demande-maintenances'].list(),
+        entityServices.interventions.list(),
+        entityServices['fiche-reparations'].list(),
+        entityServices.factures.list()
+      ]);
 
-    const requests = ADMIN_DASHBOARD_ENDPOINTS.map(async (item) => {
-      try {
-        const service = entityServices[item.serviceKey]
-        const rows = service ? await service.list() : []
+      const getCount = (res) => (res.status === 'fulfilled' && Array.isArray(res.value)) ? res.value.length : 0;
+      
+      setDataCounts({
+        users: getCount(usersRes),
+        departments: getCount(departmentsRes),
+        demandes: getCount(demandesRes),
+        interventions: getCount(interventionsRes),
+        fiches: getCount(fichesRes),
+        factures: getCount(facturesRes)
+      });
 
+      // Generate chart data based on loaded items
+      const mDemandes = demandesRes.status === 'fulfilled' ? demandesRes.value : [];
+      const mInterventions = interventionsRes.status === 'fulfilled' ? interventionsRes.value : [];
+
+      // Create a rolling 7-day window
+      const today = new Date();
+      const last7Days = Array.from({length: 7}, (_, i) => {
+        const d = new Date(today);
+        d.setDate(today.getDate() - (6 - i));
         return {
-          key: item.key,
-          count: rows.length,
-          error: '',
-        }
-      } catch (error) {
-        return {
-          key: item.key,
-          count: 0,
-          error: extractApiErrorMessage(error, 'Failed to load'),
-        }
-      }
-    })
+          date: d.toISOString().slice(0, 10), // YYYY-MM-DD
+          name: d.toLocaleDateString('en-US', { weekday: 'short' }),
+          requests: 0,
+          completed: 0
+        };
+      });
 
-    const results = await Promise.all(requests)
+      // Map requests
+      mDemandes.forEach(d => {
+        if (!d.date_creation) return;
+        const dateStr = d.date_creation.slice(0, 10);
+        const day = last7Days.find(day => day.date === dateStr);
+        if (day) day.requests += 1;
+      });
 
-    const nextCounts = {}
-    const nextErrors = {}
+      // Map completed interventions
+      mInterventions.forEach(i => {
+        if (!i.date_fin) return;
+        const dateStr = i.date_fin.slice(0, 10);
+        const day = last7Days.find(day => day.date === dateStr);
+        if (day && i.statut === 'termine') day.completed += 1;
+      });
 
-    for (const result of results) {
-      nextCounts[result.key] = result.count
-      nextErrors[result.key] = result.error
+      setChartData(last7Days);
+
+    } catch (err) {
+      setError(extractApiErrorMessage(err, 'Failed to fetch global analytics.'));
+    } finally {
+      setLoading(false);
     }
-
-    setCounts(nextCounts)
-    setErrors(nextErrors)
-    setSyncedAt(new Date().toISOString())
-    setLoading(false)
-  }, [])
+  };
 
   useEffect(() => {
-    const frameId = window.requestAnimationFrame(() => {
-      void loadCounts()
-    })
+    loadData();
+  }, []);
 
-    return () => {
-      window.cancelAnimationFrame(frameId)
+  const kpiData = [
+    {
+      title: 'Users & Roles',
+      count: dataCounts.users,
+      icon: Users,
+      description: 'Active accounts',
+      color: 'blue'
+    },
+    {
+      title: 'Departments',
+      count: dataCounts.departments,
+      icon: Building2,
+      description: 'Organized hubs',
+      color: 'indigo'
+    },
+    {
+      title: 'Active Maint. Requests',
+      count: dataCounts.demandes,
+      icon: ClipboardList,
+      description: 'System demands',
+      color: 'amber'
+    },
+    {
+      title: 'Total Interventions',
+      count: dataCounts.interventions,
+      icon: Wrench,
+      description: 'Tracked actions',
+      color: 'emerald'
+    },
+    {
+      title: 'Repair Sheets',
+      count: dataCounts.fiches,
+      icon: FileText,
+      description: 'Logged history',
+      color: 'violet'
+    },
+    {
+      title: 'Total Invoices',
+      count: dataCounts.factures,
+      icon: Receipt,
+      description: 'Pending & paid',
+      color: 'rose'
+    },
+  ];
+
+  // Map arbitrary colors to Tailwind classes safely
+  const colorMap = {
+    blue: 'bg-blue-100/50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    indigo: 'bg-indigo-100/50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800',
+    amber: 'bg-amber-100/50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+    emerald: 'bg-emerald-100/50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+    violet: 'bg-violet-100/50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800',
+    rose: 'bg-rose-100/50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
     }
-  }, [loadCounts])
+  };
 
-  // const metrics = useMemo(() => {
-  //   const users = counts.users || 0
-  //   const requests = counts['demande-maintenances'] || 0
-  //   const interventions = counts.interventions || 0
-  //   const factures = counts.factures || 0
-  //   const messages = counts.messages || 0
-
-  //   return [
-  //     { label: 'Users', value: users },
-  //     { label: 'Maintenance Requests', value: requests },
-  //     { label: 'Interventions', value: interventions },
-  //     { label: 'Factures', value: factures },
-  //     { label: 'Messages', value: messages },
-  //   ]
-  // }, [counts])
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  };
 
   return (
-    <div className="space-y-4">
-      <header className="glass-panel animate-rise p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
-              Admin Dashboard
-            </h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 sm:text-base">
-              Central view of the platform. Use the fixed sidebar to open each entity CRUD page.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="bg-white/70 dark:bg-slate-900/70">
-              <Bell className="h-4 w-4" />
-            </Button>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <h1 className="text-3xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white">
+            System Overview
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Live diagnostics and operations center
+          </p>
         </div>
-
-        <div className="mt-4 inline-flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400">
-          <Activity className="h-4 w-4" />
-          {syncedAt ? `Last sync ${new Date(syncedAt).toLocaleTimeString()}` : 'No sync yet'}
-        </div>
-      </header>
-
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {ADMIN_DASHBOARD_ENDPOINTS.map((item, index) => {
-          const Icon = item.icon
-          const hasError = Boolean(errors[item.key])
-
-          return (
-            <motion.div 
-              key={item.key}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <Card 
-                className="relative bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-slate-200 dark:border-white/10 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group overflow-hidden rounded-2xl cursor-pointer"
-                onClick={() => navigate(adminEntityPath(item.key))}
-              >
-                {/* Accent line and background glow */}
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-red-500 opacity-80" />
-                <div className="absolute -right-4 -top-4 w-24 h-24 bg-red-500 opacity-[0.03] rounded-full blur-2xl group-hover:opacity-[0.08] transition-opacity" />
-                
-                <CardContent className="pt-6 pb-5 relative">
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-                        {item.label}
-                      </p>
-                      <h3 className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Platform Data</h3>
-                    </div>
-                    <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 shadow-inner group-hover:rotate-12 transition-transform duration-500">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                  </div>
-
-                  <div className="flex items-end justify-between">
-                    <div className="flex items-baseline gap-1">
-                      <span className="font-display text-4xl font-black text-slate-900 dark:text-slate-100 tracking-tighter">
-                        {loading ? (
-                          <span className="inline-block w-12 h-10 bg-slate-100 dark:bg-white/5 rounded-lg animate-pulse" />
-                        ) : (
-                          counts[item.key] ?? 0
-                        )}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
-                      {hasError ? (
-                        <>
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                          <span className="text-rose-600 dark:text-rose-400">ERROR</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span className="text-emerald-600 dark:text-emerald-400 text-[9px] uppercase tracking-wider">SYNCED</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t border-slate-50 dark:border-white/5 flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 italic">
-                      Admin access only
-                    </span>
-                    <motion.div 
-                      whileHover={{ x: 3 }}
-                      className="text-slate-300 dark:text-slate-600 group-hover:text-red-500 transition-colors"
-                    >
-                      <BarChart3 className="w-3.5 h-3.5" />
-                    </motion.div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )
-        })}
+        <button onClick={loadData} disabled={loading} className="text-sm flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          <RefreshCw className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Data</span>
+        </button>
       </div>
 
-      {/* <Card className="animate-rise delay-1">
-        <CardHeader>
-          <CardTitle>Summary</CardTitle>
-          <CardDescription>Current volume by key operational areas</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {metrics.map((metric) => (
-            <div
-              key={metric.label}
-              className="flex items-center justify-between rounded-md border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/70 dark:bg-slate-800/80 px-3 py-2"
-            >
-              <span className="text-sm text-slate-700 dark:text-slate-300 dark:text-slate-300">{metric.label}</span>    
-              <Badge className="border-[#145f7a]/20 bg-[#145f7a]/10 text-[#145f7a] dark:border-[#7fb5c6]/30 dark:bg-[#7fb5c6]/20 dark:text-[#7fb5c6]">
-                {metric.value}
-              </Badge>
-            </div>
-          ))}
-        </CardContent>
-      </Card> */}
-    </div>
-  )
-}
+      {error ? (
+        <div className="p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400">
+          {error}
+        </div>
+      ) : null}
 
-export default AdminOverviewPage
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4"
+      >
+        {kpiData.map((kpi, index) => (
+          <motion.div key={index} variants={itemVariants}>
+            <Card className="full-glass hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-0 h-full">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  {kpi.title}
+                </CardTitle>
+                <div className={`p-2 rounded-xl border ${colorMap[kpi.color]}`}>
+                  <kpi.icon className="h-4 w-4" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold font-display text-slate-800 dark:text-slate-100">
+                  {loading ? '...' : kpi.count}
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    {kpi.description}
+                  </span>
+                  <Badge variant="outline" className="bg-[#1ea0d6]/10 text-[#1ea0d6] border-[#1ea0d6]/20 shadow-none text-[10px] px-1.5 py-0 h-5">
+                    Live
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+          <Card className="full-glass border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                <TrendingUp className="h-5 w-5 text-[#1ea0d6]" />
+                Volume of Requests
+              </CardTitle>
+              <CardDescription>7-day rolling window of maintenance activity</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#145f7a" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#145f7a" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#1ea0d6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#1ea0d6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-slate-200 dark:text-slate-800" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888888', fontSize: 12 }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#888888', fontSize: 12 }} />
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', border: 'none', borderRadius: '8px', color: '#fff' }}
+                      itemStyle={{ color: '#fff' }}
+                    />
+                    <Area type="monotone" dataKey="requests" stroke="#145f7a" strokeWidth={2} fillOpacity={1} fill="url(#colorRequests)" />
+                    <Area type="monotone" dataKey="completed" stroke="#1ea0d6" strokeWidth={2} fillOpacity={1} fill="url(#colorCompleted)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="full-glass border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                <ShieldCheck className="h-5 w-5 text-emerald-500" />
+                System Health & Access
+              </CardTitle>
+              <CardDescription>Platform analytics and performance metrics</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6 mt-4">
+                <div className="flex justify-between items-center p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600">
+                      <ShieldCheck className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">System Status</p>
+                      <p className="text-xs text-slate-500">All services operational</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white border-0 shadow-sm">Secure</Badge>
+                </div>
+
+                <div className="flex justify-between items-center p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600">
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Active Sessions</p>
+                      <p className="text-xs text-slate-500">Currently authenticated</p>
+                    </div>
+                  </div>
+                  <span className="font-display font-bold text-lg text-slate-800 dark:text-slate-200">18</span>
+                </div>
+                
+                <div className="flex justify-between items-center p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-600">
+                      <Activity className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">System Load</p>
+                      <p className="text-xs text-slate-500">Server resource utilization</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-display font-bold text-lg text-slate-800 dark:text-slate-200">12%</span>
+                    <Badge variant="outline" className="border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 shadow-none">Low</Badge>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminOverviewPage;

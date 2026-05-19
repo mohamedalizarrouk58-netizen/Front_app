@@ -4,7 +4,7 @@ function Card({ className, ...props }) {
   return (
     <div
       className={cn(
-        'rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/85 dark:bg-slate-800/85 text-slate-900 dark:text-slate-100 shadow-sm backdrop-blur',
+        'dashboard-card rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-white/85 dark:bg-slate-800/85 text-slate-900 dark:text-slate-100 shadow-sm backdrop-blur',
         className,
       )}
       {...props}

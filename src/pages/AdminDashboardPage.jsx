@@ -150,7 +150,7 @@ const MODULES = [
     columns: [
       { key: 'id', label: 'ID' },
       { key: 'montant_total', label: 'Amount', type: 'currency' },
-      { key: 'est_payee', label: 'Paid', type: 'boolean' },
+      { key: 'est_payee', label: 'Paiement', type: 'boolean' },
       { key: 'date_facture', label: 'Date', type: 'date' },
     ],
   },
@@ -724,7 +724,6 @@ function AdminDashboardPage() {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px' }} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -763,7 +762,6 @@ function AdminDashboardPage() {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                      <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px' }} />
                       <Area type="monotone" dataKey="count" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorCountAdmin)" dot={{ r: 3, fill: '#ef4444', strokeWidth: 1, stroke: '#fff' }} />
                     </AreaChart>
                   </ResponsiveContainer>

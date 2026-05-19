@@ -11,6 +11,9 @@ import messagesService from './messages.service'
 import paiementsService from './paiements.service'
 import piecesService from './pieces.service'
 import usersService from './users.service'
+import fournisseursService from './fournisseurs.service'
+import commandesPiecesService from './commandes_pieces.service'
+import prixFournisseursService from './prix_fournisseurs.service'
 
 export const entityServices = {
   users: usersService,
@@ -26,4 +29,7 @@ export const entityServices = {
   factures: facturesService,
   paiements: paiementsService,
   messages: messagesService,
+  fournisseurs: fournisseursService,
+  'commandes-pieces': commandesPiecesService,
+  'prix-fournisseurs': prixFournisseursService,
 }

@@ -1,10 +1,12 @@
+import i18n from '../../i18n'
+
 export function displayRoleValue(value) {
   if (value === null || value === undefined || value === '') {
     return '-'
   }
 
   if (typeof value === 'boolean') {
-    return value ? 'Yes' : 'No'
+    return value ? i18n.t('Yes') : i18n.t('No')
   }
 
   if (typeof value === 'object') {

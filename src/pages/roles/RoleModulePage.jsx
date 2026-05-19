@@ -1,10 +1,12 @@
-import { Navigate, useOutletContext, useParams } from 'react-router-dom'
-import { Pencil, Plus, RefreshCw, Search, Trash2, X, TrendingUp } from 'lucide-react'
+import { Navigate, useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { ArrowLeft, Pencil, Plus, RefreshCw, Search, Trash2, X, TrendingUp } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
+import i18n from '../../i18n'
 import {
   Card,
   CardContent,
@@ -37,13 +39,13 @@ function buildEditForm(fields, row) {
 
 function toUserRef(value) {
   if (value === null || value === undefined) {
-    return { id: null, name: 'Unknown User' }
+    return { id: null, name: i18n.t('Unknown User') }
   }
 
   if (typeof value === 'object') {
     return {
       id: value.id ? Number(value.id) : null,
-      name: value.username || value.nom_complet || value.email || (value.id ? `User #${value.id}` : 'Unknown User'),
+      name: value.username || value.nom_complet || value.email || (value.id ? `User #${value.id}` : i18n.t('Unknown User')),
     }
   }
 
@@ -119,7 +121,7 @@ function getPieceCategoryName(row) {
   if (row?.categorie && typeof row.categorie === 'object' && row.categorie.nom) {
     return row.categorie.nom
   }
-  return 'Unrecognized'
+  return i18n.t('Unrecognized')
 }
 
 function groupPieceRows(rows) {
@@ -178,8 +180,10 @@ function groupRequestedPieceRows(requestRows, availablePieces) {
 }
 
 function RoleModulePage() {
+  const { t } = useTranslation()
   const { moduleKey } = useParams()
   const { role, workspace } = useOutletContext()
+  const navigate = useNavigate()
   const auth = getStoredAuth()
   const wsRef = useRef(null)
   const messagesListRef = useRef(null)
@@ -349,11 +353,11 @@ function RoleModulePage() {
 
       setRows(list)
     } catch (requestError) {
-      setError(extractApiErrorMessage(requestError, 'Failed to load module data.'))
+      setError(extractApiErrorMessage(requestError, t('Failed to load module data.')))
     } finally {
       setLoading(false)
     }
-  }, [moduleConfig, service])
+  }, [moduleConfig, service, t])
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -375,7 +379,7 @@ function RoleModulePage() {
         result = result.filter((row) => Number(row.manager) === currentUserId || Number(row.manager?.id) === currentUserId)
       }
 
-      if (role === 'receptioniste' && moduleConfig?.key === 'demande-maintenances') {
+      if (moduleConfig?.key === 'demande-maintenances') {
         if (filterStatut !== 'tous') {
           result = result.filter(row => row.statut === filterStatut)
         }
@@ -690,15 +694,20 @@ function RoleModulePage() {
         await loadFichePieces(currentFiche.id);
       }
     } catch (e) {
-      console.error("Failed to cancel piece request", e);
+      console.error(t('Failed to cancel piece request'), e)
     }
   }
 
   const handleFieldChange = (fieldKey, value) => {
-    setFormData((previous) => ({
-      ...previous,
-      [fieldKey]: value,
-    }))
+    setFormData((previous) => {
+      const nextData = { ...previous, [fieldKey]: value }
+      
+      if (role === 'manager' && moduleConfig?.key === 'fiche-reparations' && fieldKey === 'confirmation') {
+        nextData.valide_manager = value
+      }
+      
+      return nextData
+    })
   }
 
   const buildPayload = () => {
@@ -776,7 +785,7 @@ function RoleModulePage() {
            payload.statut === 'en_cours'
         ) {
            if (!formData.technicien || !formData.description_panne) {
-             setSaveError('Technicien and Description Panne are required to accept the request.')
+             setSaveError(t('Technicien and Description Panne are required to accept the request.'))
              setSaving(false)
              return
            }
@@ -804,7 +813,7 @@ function RoleModulePage() {
                })
              }
            } catch (e) {
-             console.error("Failed to spawn intervention and fiche", e)
+             console.error(t('Failed to spawn intervention and fiche'), e)
            }
         } else {
            await service.update(editingId, payload)
@@ -825,7 +834,7 @@ function RoleModulePage() {
 
       closeDrawer()
     } catch (requestError) {
-      setSaveError(extractApiErrorMessage(requestError, 'Unable to save changes.'))
+      setSaveError(extractApiErrorMessage(requestError, t('Unable to save changes.')))
     } finally {
       setSaving(false)
     }
@@ -842,7 +851,7 @@ function RoleModulePage() {
       await service.remove(rowId)
       await loadRows()
     } catch (requestError) {
-      setError(extractApiErrorMessage(requestError, 'Unable to delete record.'))
+      setError(extractApiErrorMessage(requestError, t('Unable to delete record.')))
     } finally {
       setDeletingId(null)
     }
@@ -857,19 +866,19 @@ function RoleModulePage() {
     const recipientId = resolvedRecipientId
 
     if (!recipientId) {
-      setSaveError('Select a recipient first.')
+      setSaveError(t('Select a recipient first.'))
       return
     }
 
     if (!contenu) {
-      setSaveError('Message content is required.')
+      setSaveError(t('Message content is required.'))
       return
     }
 
     const defaultSubject =
       String(activeConversation?.lastMessage?.objet ?? '').trim() ||
       String(activeConversation?.party?.displayName ?? '').trim() ||
-      'Message'
+      t('Message')
 
     const payload = {
       destinataire: recipientId,
@@ -896,7 +905,7 @@ function RoleModulePage() {
       setComposerContent('')
       setComposerSubject('')
     } catch (requestError) {
-      setSaveError(extractApiErrorMessage(requestError, 'Unable to send message.'))
+      setSaveError(extractApiErrorMessage(requestError, t('Unable to send message.')))
     } finally {
       setSaving(false)
     }
@@ -910,13 +919,25 @@ function RoleModulePage() {
     <div className="space-y-4">
       <header className="glass-panel animate-rise p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
-              {moduleConfig.label}
-            </h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 sm:text-base">
-              {moduleConfig.description || `Operational view for ${moduleConfig.label.toLowerCase()}.`}
-            </p>
+          <div className="flex items-start gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => navigate(roleDashboardPath(role))}
+              aria-label={t('Go back')}
+              className="mt-0.5 shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="font-display text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
+                {moduleConfig.label}
+              </h1>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 sm:text-base">
+                {moduleConfig.description || `Operational view for ${moduleConfig.label.toLowerCase()}.`}
+              </p>
+            </div>
           </div>
 
           <div className="inline-flex items-center gap-2">
@@ -964,6 +985,7 @@ function RoleModulePage() {
                 <option value="tous">Tous les status</option>
                 <option value="en_attente">En Attente</option>
                 <option value="en_cours">En Cours</option>
+                <option value="termine">Terminé</option>
                 <option value="refuse">Non Résolu</option>
               </select>
 
@@ -975,7 +997,7 @@ function RoleModulePage() {
                 <option value="tous">Toutes les priorités</option>
                 <option value="haute">Haute</option>
                 <option value="moyenne">Moyenne</option>
-                <option value="basse">Basse</option>
+                <option value="faible">Faible</option>
               </select>
             </div>
           )}
@@ -1010,7 +1032,7 @@ function RoleModulePage() {
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/40 shadow-sm shadow-blue-100'
                   : 'border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/30 hover:shadow-sm'
              }`}>
-                <div className="flex items-center gap-4 flex-1">
+                <div className="flex items-center gap-4 flex-1 sm:grid sm:grid-cols-[64px_96px_1fr] md:grid-cols-[64px_96px_1fr_1.5fr] lg:grid-cols-[64px_96px_1fr_2fr_96px] xl:grid-cols-[64px_96px_1fr_2fr_96px_96px]">
                   <div className="flex-shrink-0 w-16">
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">INT-{row.id}</span>
                   </div>
@@ -1042,7 +1064,7 @@ function RoleModulePage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pl-4 ml-4 border-l border-slate-100 flex-shrink-0">
+                <div className="flex items-center gap-2 sm:justify-end pl-4 ml-4 border-l border-slate-100 flex-shrink-0 sm:w-[160px]">
                   {row.statut === 'en_attente' && (
                     <>
                       <Button
@@ -1130,7 +1152,7 @@ function RoleModulePage() {
              
              return (
                <div key={row.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/30 hover:shadow-sm transition-all rounded-lg p-3 lg:p-4">
-                  <div className="flex items-center gap-4 flex-1 flex-wrap sm:flex-nowrap">
+                  <div className="flex items-center gap-4 flex-1 flex-wrap sm:flex-nowrap sm:grid sm:grid-cols-[80px_96px_1fr_80px] md:grid-cols-[80px_96px_1fr_80px_96px] lg:grid-cols-[80px_96px_1fr_80px_96px_96px]">
                     <div className="flex-shrink-0 w-20">
                       <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">REQ-P-{row.id}</span>
                     </div>
@@ -1166,7 +1188,7 @@ function RoleModulePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 flex-shrink-0 self-end sm:self-auto w-full sm:w-auto">
+                  <div className="flex items-center gap-2 sm:justify-end sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 flex-shrink-0 self-end sm:self-auto w-full sm:w-[180px]">
                     {row.statut === 'demandee' && (
                        <Button 
                          size="sm" 
@@ -1248,7 +1270,7 @@ function RoleModulePage() {
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/40 shadow-sm shadow-blue-100'
                   : 'border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/30 hover:shadow-sm'
              }`}>
-                <div className="flex items-center gap-4 flex-1">
+                <div className="flex items-center gap-4 flex-1 sm:grid sm:grid-cols-[64px_96px_1fr_96px] md:grid-cols-[64px_96px_1fr_128px_96px] lg:grid-cols-[64px_96px_1fr_128px_96px_96px]">
                   <div className="flex-shrink-0 w-16">
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">REQ-{row.id}</span>
                   </div>
@@ -1288,12 +1310,12 @@ function RoleModulePage() {
                         row.priorite === 'haute' ? 'bg-rose-500' : 
                         row.priorite === 'moyenne' ? 'bg-amber-500' : 'bg-emerald-500'
                       }`}></span>
-                      {row.priorite?.toUpperCase()}
+                      {row.priorite === 'basse' ? 'FAIBLE' : row.priorite === 'faible' ? 'FAIBLE' : row.priorite?.toUpperCase()}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pl-4 ml-4 border-l border-slate-100 flex-shrink-0">
+                <div className="flex items-center gap-2 sm:justify-end pl-4 ml-4 border-l border-slate-100 flex-shrink-0 sm:w-[220px]">
                   {(role === 'manager' || role === 'administrateur' || role === 'admin') && row.statut === 'en_attente' && (
                     <>
                       <Button
@@ -1556,10 +1578,10 @@ function RoleModulePage() {
                   <ul className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
                     {group.items.map((row, rowIndex) => (
                       <li key={row.id ?? `${moduleConfig.key}-${group.key}-${rowIndex}`} className="border-b border-slate-100 px-4 py-3.5 last:border-b-0 sm:flex sm:items-center sm:justify-between">
-                        <div className="flex flex-1 flex-wrap items-center gap-4">
+                        <div className="table-row-grid flex-1 w-full" style={{ '--row-grid-cols': `64px repeat(${moduleConfig.columns.length - 1}, minmax(0, 1fr))` }}>
                           {moduleConfig.columns.map((column, colIndex) => (
-                            <div key={`${column}-${group.key}-${rowIndex}`} className={`flex flex-col ${colIndex === 0 ? 'w-16 shrink-0' : 'min-w-30 flex-1'}`}>
-                              <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{column.replace(/_/g, ' ')}</span>
+                            <div key={`${column}-${group.key}-${rowIndex}`} className="flex flex-col min-w-0">
+                              <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{column === 'est_payee' ? 'paiement' : column.replace(/_/g, ' ')}</span>
 
                               {colIndex === 0 ? (
                                 <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">#{getResolvedColumnValue(column, row[column])}</span>
@@ -1579,7 +1601,7 @@ function RoleModulePage() {
                         </div>
 
                         {(permissions.update || permissions.delete) && (
-                          <div className="mt-3 flex shrink-0 items-center gap-2 sm:mt-0 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 self-end sm:self-auto">
+                          <div className="mt-3 flex shrink-0 items-center justify-end gap-2 sm:mt-0 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 self-end sm:self-auto sm:w-[200px]">
                             {permissions.update ? (
                               <Button size="sm" variant="ghost" className="h-8 px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
                                 <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
@@ -1607,10 +1629,10 @@ function RoleModulePage() {
             ) : (
               filteredRows.map((row, rowIndex) => (
                  <div key={row.id ?? `${moduleConfig.key}-${rowIndex}`} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/30 hover:shadow-sm transition-all rounded-lg p-3 lg:p-4">
-                    <div className="flex items-center gap-4 flex-1 flex-wrap">
+                    <div className="table-row-grid flex-1 w-full" style={{ '--row-grid-cols': `64px repeat(${moduleConfig.columns.length - 1}, minmax(0, 1fr))` }}>
                       {moduleConfig.columns.map((column, colIndex) => (
-                        <div key={`${column}-${rowIndex}`} className={`flex flex-col ${colIndex === 0 ? 'w-16 shrink-0' : 'min-w-30 flex-1'}`}>
-                          <span className="text-slate-400 dark:text-slate-300 text-[10px] uppercase tracking-wider font-semibold mb-0.5">{column.replace(/_/g, ' ')}</span>
+                        <div key={`${column}-${rowIndex}`} className="flex flex-col min-w-0">
+                          <span className="text-slate-400 dark:text-slate-300 text-[10px] uppercase tracking-wider font-semibold mb-0.5">{column === 'est_payee' ? 'paiement' : column.replace(/_/g, ' ')}</span>
 
                           {colIndex === 0 ? (
                              <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">#{getResolvedColumnValue(column, row[column])}</span>
@@ -1630,7 +1652,7 @@ function RoleModulePage() {
                     </div>
 
                     {(permissions.update || permissions.delete) && (
-                      <div className="flex items-center gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto mt-2 sm:mt-0">
+                      <div className="flex items-center justify-end gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto mt-2 sm:mt-0 sm:w-[200px]">
                         {permissions.update ? (
                           <Button size="sm" variant="ghost" className="h-8 text-[#145f7a] hover:bg-sky-50 px-2" onClick={() => openEdit(row)}>
                             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier

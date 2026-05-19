@@ -95,6 +95,56 @@ html.dark .sidebar-link:hover {
   background: rgba(30, 41, 59, 0.9);
 }
 
+.compact-sidebar-icon {
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.compact-sidebar-icon:hover,
+.group:hover .compact-sidebar-icon {
+  transform: scale(1.08) rotate(-3deg);
+}
+
+.compact-sidebar-pill {
+  position: absolute;
+  left: 3.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
+  transition: opacity 0ms ease;
+  z-index: 20;
+}
+
+.group:hover .compact-sidebar-pill {
+  opacity: 1;
+}
+
+html.dark .compact-sidebar-pill {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+
+
+
+@media (max-width: 1023px) {
+  .dashboard-card {
+    transition: transform 200ms ease;
+  }
+
+  .dashboard-card:hover {
+    transform: translateX(4px);
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -122,5 +172,17 @@ html.dark .sidebar-link:hover {
   animation-delay: 0.24s;
 }
 
-
-
+/* Grid Layout for Aligned Tables */
+.table-row-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+@media (min-width: 640px) {
+  .table-row-grid {
+    display: grid;
+    grid-template-columns: var(--row-grid-cols, 64px repeat(auto-fit, minmax(0, 1fr)));
+    align-items: center;
+    gap: 1rem;
+  }
+}
