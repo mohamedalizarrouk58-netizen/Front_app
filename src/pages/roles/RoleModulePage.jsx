@@ -1,5 +1,5 @@
 import { Navigate, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil, Plus, RefreshCw, Search, Trash2, X, TrendingUp } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus, Printer, RefreshCw, Search, Trash2, X, TrendingUp, AlertTriangle } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '../../components/ui/badge'
@@ -247,6 +247,7 @@ function RoleModulePage() {
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
   const [wsState, setWsState] = useState('idle')
   const [activeConversationKey, setActiveConversationKey] = useState('')
   const [composerSubject, setComposerSubject] = useState('')
@@ -258,6 +259,140 @@ function RoleModulePage() {
   const [selectedPieceId, setSelectedPieceId] = useState('')
   const [selectedPieceQty, setSelectedPieceQty] = useState(1)
   const [requestingPiece, setRequestingPiece] = useState(false)
+
+  const printFacture = useCallback((row) => {
+    const clientName = typeof row.client === 'object'
+      ? (row.client.nom_complet || row.client.email || `Client #${row.client.id}`)
+      : (lookupData.clients
+          ? (lookupData.clients.find(c => String(c.id) === String(row.client))?.nom_complet || `Client #${row.client}`)
+          : `Client #${row.client}`)
+
+    const interventionRef = typeof row.intervention === 'object'
+      ? (row.intervention.id || row.intervention)
+      : row.intervention
+
+    const montant = Number(row.montant_total) || 0
+    const dateFacture = row.date_facture
+      ? new Date(row.date_facture).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })
+      : new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })
+    const estPayee = row.est_payee === true || row.est_payee === 'true'
+    const now = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+    const printWindow = window.open('', '_blank', 'width=800,height=1000')
+    if (!printWindow) return
+
+    printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Facture #${row.id} - Gestion MT</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; color: #1e293b; background: #fff; padding: 40px; }
+    .invoice-container { max-width: 700px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 3px solid #145f7a; }
+    .logo-area h1 { font-size: 28px; font-weight: 800; color: #145f7a; letter-spacing: -0.5px; }
+    .logo-area p { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .invoice-badge { background: #145f7a; color: white; padding: 10px 20px; border-radius: 8px; text-align: right; }
+    .invoice-badge h2 { font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+    .invoice-badge p { font-size: 11px; opacity: 0.85; margin-top: 4px; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 36px; }
+    .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; }
+    .meta-card h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: #94a3b8; font-weight: 700; margin-bottom: 12px; }
+    .meta-card p { font-size: 14px; color: #334155; line-height: 1.7; }
+    .meta-card strong { color: #0f172a; font-weight: 600; }
+    .details-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    .details-table thead th { background: #145f7a; color: white; padding: 12px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; text-align: left; }
+    .details-table thead th:first-child { border-radius: 8px 0 0 0; }
+    .details-table thead th:last-child { border-radius: 0 8px 0 0; text-align: right; }
+    .details-table tbody td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid #e2e8f0; }
+    .details-table tbody td:last-child { text-align: right; font-weight: 600; }
+    .total-section { display: flex; justify-content: flex-end; margin-bottom: 36px; }
+    .total-box { background: linear-gradient(135deg, #145f7a 0%, #0c4358 100%); color: white; padding: 20px 32px; border-radius: 10px; text-align: right; min-width: 260px; }
+    .total-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.8; }
+    .total-box .amount { font-size: 32px; font-weight: 800; margin-top: 4px; }
+    .total-box .currency { font-size: 16px; font-weight: 400; opacity: 0.8; }
+    .status-section { text-align: center; margin-bottom: 36px; padding: 16px; border-radius: 10px; }
+    .status-paid { background: #ecfdf5; border: 2px solid #a7f3d0; color: #065f46; }
+    .status-unpaid { background: #fef2f2; border: 2px solid #fecaca; color: #991b1b; }
+    .status-section span { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
+    .footer { border-top: 2px solid #e2e8f0; padding-top: 20px; text-align: center; }
+    .footer p { font-size: 11px; color: #94a3b8; line-height: 1.8; }
+    .footer .thank-you { font-size: 14px; font-weight: 600; color: #145f7a; margin-bottom: 8px; }
+    @media print {
+      body { padding: 20px; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice-container">
+    <div class="header">
+      <div class="logo-area">
+        <h1>Gestion MT</h1>
+        <p>Système de Gestion de Maintenance Technique</p>
+      </div>
+      <div class="invoice-badge">
+        <h2>FACTURE</h2>
+        <p>N° ${String(row.id).padStart(5, '0')}</p>
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-card">
+        <h3>Informations Client</h3>
+        <p><strong>${clientName}</strong></p>
+      </div>
+      <div class="meta-card">
+        <h3>Détails Facture</h3>
+        <p><strong>Date :</strong> ${dateFacture}</p>
+        <p><strong>Intervention :</strong> INT-${interventionRef || '-'}</p>
+        <p><strong>Imprimé le :</strong> ${now}</p>
+      </div>
+    </div>
+
+    <table class="details-table">
+      <thead>
+        <tr>
+          <th>Désignation</th>
+          <th>Détail</th>
+          <th>Montant</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Service de maintenance</td>
+          <td>Intervention #${interventionRef || '-'}</td>
+          <td>${montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} TND</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="total-section">
+      <div class="total-box">
+        <div class="label">Montant Total</div>
+        <div class="amount">${montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} <span class="currency">TND</span></div>
+      </div>
+    </div>
+
+    <div class="status-section ${estPayee ? 'status-paid' : 'status-unpaid'}">
+      <span>${estPayee ? '✓ FACTURE PAYÉE' : '✗ FACTURE NON PAYÉE'}</span>
+    </div>
+
+    <div class="footer">
+      <p class="thank-you">Merci pour votre confiance</p>
+      <p>Ce document est généré automatiquement par le système Gestion MT.<br/>Pour toute question, veuillez contacter le service de réception.</p>
+    </div>
+  </div>
+
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>
+    `)
+    printWindow.document.close()
+  }, [lookupData.clients])
 
   const isMessagesModule = moduleConfig?.key === 'messages'
 
@@ -273,6 +408,9 @@ function RoleModulePage() {
         String(d.id) === String(value?.id || value)
       )
       if (match) {
+        if (field.lookup.serviceKey === 'pieces') {
+          return `${match.id} - ${displayRoleValue(match[field.lookup.labelKey] ?? match)}`
+        }
         return displayRoleValue(match[field.lookup.labelKey] ?? match)
       }
     }
@@ -290,12 +428,12 @@ function RoleModulePage() {
   )
 
   const loadLookups = useCallback(async () => {
-    if (!editableFields.length) {
+    if (!moduleEntity?.fields) {
       setLookupData({})
       return
     }
 
-    const lookupFields = editableFields.filter((field) => field.type === 'lookup' && field.lookup)
+    const lookupFields = moduleEntity.fields.filter((field) => field.type === 'lookup' && field.lookup)
     const uniqueServiceKeys = [...new Set(lookupFields.map((field) => field.lookup.serviceKey))]
 
     if (uniqueServiceKeys.length === 0) {
@@ -326,7 +464,7 @@ function RoleModulePage() {
     }
 
     setLookupData(nextLookupMap)
-  }, [editableFields])
+  }, [moduleEntity])
 
   const loadRows = useCallback(async () => {
     if (!service) {
@@ -362,15 +500,13 @@ function RoleModulePage() {
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       void loadRows()
-      if (permissions.create || permissions.update) {
-        void loadLookups()
-      }
+      void loadLookups()
     })
 
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [loadLookups, loadRows, permissions.create, permissions.update])
+  }, [loadLookups, loadRows])
 
   const filteredRows = useMemo(() => {
       let result = rows
@@ -840,7 +976,8 @@ function RoleModulePage() {
     }
   }
 
-  const deleteRow = async (rowId) => {
+  const confirmDelete = async () => {
+    const rowId = deleteModalState.row?.id
     if (!permissions.delete || !service || !rowId) {
       return
     }
@@ -850,6 +987,7 @@ function RoleModulePage() {
     try {
       await service.remove(rowId)
       await loadRows()
+      setDeleteModalState({ isOpen: false, row: null })
     } catch (requestError) {
       setError(extractApiErrorMessage(requestError, t('Unable to delete record.')))
     } finally {
@@ -1147,8 +1285,8 @@ function RoleModulePage() {
       ) : role === 'chefstock' && moduleConfig?.key === 'demande-pieces' ? (
         <div className="flex flex-col gap-3 animate-rise delay-1">
           {filteredRows.map(row => {
-             const pieceName = displayRoleValue(row.piece);
-             const ficheId = displayRoleValue(row.fiche);
+             const pieceName = getResolvedColumnValue('piece', row.piece);
+             const ficheId = getResolvedColumnValue('fiche', row.fiche);
              
              return (
                <div key={row.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/30 hover:shadow-sm transition-all rounded-lg p-3 lg:p-4">
@@ -1613,7 +1751,7 @@ function RoleModulePage() {
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 px-2 text-rose-600 hover:bg-rose-50"
-                                onClick={() => deleteRow(row.id)}
+                                onClick={() => setDeleteModalState({ isOpen: true, row })}
                                 disabled={deletingId === row.id}
                               >
                                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Supprimer
@@ -1651,8 +1789,19 @@ function RoleModulePage() {
                       ))}
                     </div>
 
-                    {(permissions.update || permissions.delete) && (
+                    {(permissions.update || permissions.delete || (role === 'receptioniste' && moduleConfig?.key === 'factures')) && (
                       <div className="flex items-center justify-end gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto mt-2 sm:mt-0 sm:w-[200px]">
+                        {role === 'receptioniste' && moduleConfig?.key === 'factures' ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2.5 text-[#145f7a] hover:bg-[#145f7a]/10 gap-1.5 font-medium"
+                            onClick={() => printFacture(row)}
+                          >
+                            <Printer className="h-3.5 w-3.5" /> Imprimer
+                          </Button>
+                        ) : null}
+
                         {permissions.update ? (
                           <Button size="sm" variant="ghost" className="h-8 text-[#145f7a] hover:bg-sky-50 px-2" onClick={() => openEdit(row)}>
                             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
@@ -1664,7 +1813,7 @@ function RoleModulePage() {
                             size="sm"
                             variant="ghost"
                             className="h-8 text-rose-600 hover:bg-rose-50 px-2"
-                            onClick={() => deleteRow(row.id)}
+                            onClick={() => setDeleteModalState({ isOpen: true, row })}
                             disabled={deletingId === row.id}
                           >
                             <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Supprimer
@@ -2044,6 +2193,30 @@ function RoleModulePage() {
           </div>
         </div>
       ) : null}
+
+      {deleteModalState.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 mb-4">
+                <AlertTriangle className="h-8 w-8 text-rose-600 dark:text-rose-400" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Confirmer la suppression</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">
+                Êtes-vous sûr de vouloir supprimer l'élément <strong className="text-slate-800 dark:text-slate-200">{displayRoleValue(deleteModalState.row?.nom || deleteModalState.row?.numero_serie || deleteModalState.row?.nom_complet || deleteModalState.row?.username || deleteModalState.row?.id)}</strong> ? Cette action est irréversible.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
+                  Annuler
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
+                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

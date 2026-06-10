@@ -1,12 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark, .dark *));
 
-@theme {
-  --font-body: 'Manrope', sans-serif;
-  --font-display: 'Space Grotesk', sans-serif;
-}
 
 * {
   box-sizing: border-box;
@@ -15,16 +10,16 @@
 body {
   margin: 0;
   font-family: var(--font-body);
-  color: #0f172a;
-  background: #ffffff;
+  color: #334155;
+  background: #f8fafc;
   transition: background 0.3s ease, color 0.3s ease;
 }
 
 html.dark body {
-  color: #e2e8f0;
+  color: #f1f5f9;
   background:
-    radial-gradient(circle at 5% 12%, rgba(127, 181, 198, 0.15), transparent 42%),
-    radial-gradient(circle at 88% 80%, rgba(20, 95, 122, 0.15), transparent 36%),
+    radial-gradient(circle at 5% 12%, rgba(56, 189, 248, 0.1), transparent 42%),
+    radial-gradient(circle at 88% 80%, rgba(129, 140, 248, 0.1), transparent 36%),
     #0f172a;
 }
 
@@ -37,30 +32,30 @@ html.dark body {
 }
 
 .glass-panel {
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 16px 40px -26px rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 40px -10px rgba(148, 163, 184, 0.2);
+  backdrop-filter: blur(12px);
 }
 
 html.dark .glass-panel {
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 16px 40px -26px rgba(0, 0, 0, 0.6);
 }
 
 .dashboard-grid {
   background-image:
-    linear-gradient(rgba(20, 95, 122, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 95, 122, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
   background-size: 26px 26px;
 }
 
 html.dark .dashboard-grid {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 }
 
 .sidebar-link {
@@ -71,28 +66,29 @@ html.dark .dashboard-grid {
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 10px 12px;
-  color: #334155;
+  color: #475569;
   font-size: 14px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.6);
   transition: all 0.2s ease;
 }
 
 html.dark .sidebar-link {
   color: #94a3b8;
-  background: rgba(30, 41, 59, 0.35);
+  background: rgba(30, 41, 59, 0.5);
 }
 
 .sidebar-link:hover {
-  border-color: rgba(20, 95, 122, 0.18);
-  color: #0f4e64;
-  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #0369a1;
+  background: #ffffff;
+  box-shadow: 0 4px 12px -4px rgba(56, 189, 248, 0.15);
 }
 
 html.dark .sidebar-link:hover {
-  border-color: rgba(127, 181, 198, 0.18);
-  color: #e0f2fe;
-  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #f0f9ff;
+  background: rgba(15, 23, 42, 0.8);
 }
 
 .compact-sidebar-icon {
@@ -118,7 +114,7 @@ html.dark .sidebar-link:hover {
   font-size: 12px;
   font-weight: 600;
   color: #334155;
-  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.25);
   transition: opacity 0ms ease;
   z-index: 20;
 }
@@ -128,12 +124,10 @@ html.dark .sidebar-link:hover {
 }
 
 html.dark .compact-sidebar-pill {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
-
-
-
 
 @media (max-width: 1023px) {
   .dashboard-card {
@@ -150,6 +144,7 @@ html.dark .compact-sidebar-pill {
     opacity: 0;
     transform: translateY(16px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -178,6 +173,7 @@ html.dark .compact-sidebar-pill {
   flex-direction: column;
   gap: 0.75rem;
 }
+
 @media (min-width: 640px) {
   .table-row-grid {
     display: grid;

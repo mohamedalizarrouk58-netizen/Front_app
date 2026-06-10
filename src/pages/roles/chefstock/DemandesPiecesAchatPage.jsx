@@ -29,6 +29,8 @@ export default function DemandesPiecesAchatPage() {
   // State for modals
   const [assignModal, setAssignModal] = useState({ open: false, demandeId: null, fournisseurId: '' })
   const [receiveModal, setReceiveModal] = useState({ open: false, demandeId: null, quantite_livree: 1, numero_facture: '' })
+  const [supplierResponseModal, setSupplierResponseModal] = useState({ open: false, demandeId: null, decision: '', prix: '', motif_refus: '' })
+  const [createModal, setCreateModal] = useState({ open: false, pieceId: '', quantite: 1 })
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -40,7 +42,7 @@ export default function DemandesPiecesAchatPage() {
         entityServices.pieces.list(),
       ])
       // Only care about those that are hors stock or in supplier pipeline
-      const filteredDems = dems.filter(d => 
+      const filteredDems = dems.filter(d =>
         ['hors_stock', 'en_attente_fournisseur', 'acceptee_fournisseur', 'refusee_fournisseur'].includes(d.statut)
       )
       setDemandes(filteredDems)
@@ -78,10 +80,10 @@ export default function DemandesPiecesAchatPage() {
     e.preventDefault()
     try {
       setLoading(true)
-      const payload = supplierResponseModal.decision === 'accepter' 
+      const payload = supplierResponseModal.decision === 'accepter'
         ? { prix: supplierResponseModal.prix }
         : { motif_refus: supplierResponseModal.motif_refus }
-      
+
       await demandePiecesService.reponseFournisseur(supplierResponseModal.demandeId, supplierResponseModal.decision, payload)
       setSupplierResponseModal({ open: false, demandeId: null, decision: '', prix: '', motif_refus: '' })
       loadData()
@@ -102,7 +104,7 @@ export default function DemandesPiecesAchatPage() {
       })
       setReceiveModal({ open: false, demandeId: null, quantite_livree: 1, numero_facture: '' })
       // Reload main page tracking, as it might no longer be 'en achat'
-      loadData() 
+      loadData()
     } catch (err) {
       setError(extractApiErrorMessage(err, 'Erreur lors de la réception de la livraison.'))
     } finally {
@@ -110,32 +112,65 @@ export default function DemandesPiecesAchatPage() {
     }
   }
 
+  const handleCreateDemande = async (e) => {
+    e.preventDefault()
+    try {
+      setLoading(true)
+      await demandePiecesService.create({
+        piece: parseInt(createModal.pieceId),
+        quantite: parseInt(createModal.quantite),
+        statut: 'hors_stock'
+      })
+      setCreateModal({ open: false, pieceId: '', quantite: 1 })
+      loadData()
+    } catch (err) {
+      setError(extractApiErrorMessage(err, 'Erreur lors de la création de la demande.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => navigate('/chefstock/achat-piece')}
-            variant="outline"
-            size="icon"
-            className="shrink-0 rounded-xl"
-            disabled={loading}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">Suivi Demandes Achat</h1>
-            <p className="text-slate-500 mt-1">Gestion des pièces hors stock et workflows fournisseurs (Assignation &rarr; Facturation)</p>
+      <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-950 text-white p-6 sm:p-8 shadow-xl">
+        <div className="absolute -top-14 -right-14 h-40 w-40 rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-12 left-1/3 h-28 w-28 rounded-full bg-amber-500/20 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-center gap-4">
+            <Button
+              onClick={() => navigate('/chefstock/achat-piece')}
+              variant="outline"
+              size="icon"
+              className="shrink-0 rounded-xl bg-white/10 border-white/20 hover:bg-white/20 text-white"
+              disabled={loading}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-slate-300">Kanban Board</p>
+              <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Suivi Demandes Achat</h1>
+              <p className="mt-2 text-sm text-slate-300 max-w-xl">
+                Gestion des pièces hors stock et workflows fournisseurs (Assignation &rarr; Réception &rarr; Facturation)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button onClick={() => setCreateModal({ open: true, pieceId: '', quantite: 1 })} disabled={loading} className="gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white border-0 shadow-md">
+              <ShoppingCart className="h-4 w-4" />
+              Nouvelle Demande
+            </Button>
+            <Button onClick={loadData} disabled={loading} className="gap-2 rounded-xl bg-white/10 border-white/20 hover:bg-white/20 text-white border">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Rafraîchir
+            </Button>
           </div>
         </div>
-        <Button onClick={loadData} disabled={loading} className="gap-2 rounded-xl">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Rafraîchir
-        </Button>
-      </div>
+      </section>
 
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex gap-3 items-center">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex gap-3 items-center shadow-sm">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
           <p className="font-medium">{error}</p>
         </div>
@@ -143,7 +178,7 @@ export default function DemandesPiecesAchatPage() {
 
       {/* Kanban Board / Flex Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
+
         {/* Column 1: Hors Stock (Need Assignment) */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b-2 border-rose-500 pb-2">
@@ -163,8 +198,8 @@ export default function DemandesPiecesAchatPage() {
                     Refusé par le fournisseur précédent. Besoin d'une ré-assignation.
                   </div>
                 )}
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   className="w-full mt-2 gap-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl"
                   onClick={() => setAssignModal({ open: true, demandeId: dem.id, fournisseurId: '' })}
                 >
@@ -187,30 +222,29 @@ export default function DemandesPiecesAchatPage() {
             <Card key={dem.id} className="rounded-2xl shadow-sm hover:shadow-md transition-all border-l-4 border-l-amber-500 bg-amber-50/50">
               <CardContent className="p-4 flex flex-col gap-3">
                 <div className="flex justify-between items-start">
-                  <div className="font-bold">{getPieceName(dem.piece)}</div>
-                  <Badge variant="outline">Qte: {dem.quantite}</Badge>
+                  <div className="font-bold text-slate-800">{getPieceName(dem.piece)}</div>
+                  <Badge variant="outline" className="bg-white">Qte: {dem.quantite}</Badge>
                 </div>
-                <div className="text-xs text-slate-500">
-                  Fournisseur assigné (ID: {dem.fournisseur_id || 'En cours'})
+                <div className="text-xs text-slate-600 bg-white/60 p-2 rounded-lg border border-amber-100">
+                  Fournisseur assigné: <span className="font-semibold">{getFournisseurName(dem.fournisseur)}</span>
                 </div>
-                
-                {/* MOCK ACTIONS FOR DEMO/TESTING */}
-                <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-slate-200">
-                  <Button 
-                    size="sm" 
+
+                <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-amber-200/50">
+                  <Button
+                    size="sm"
                     variant="outline"
-                    className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-lg text-xs h-8 px-2"
+                    className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 rounded-xl text-xs h-9 px-2 shadow-sm"
                     onClick={() => setSupplierResponseModal({ open: true, demandeId: dem.id, decision: 'accepter', prix: '', motif_refus: '' })}
                   >
-                    Simuler Accepter
+                    Saisir Accord
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="outline"
-                    className="border-rose-200 text-rose-700 hover:bg-rose-50 rounded-lg text-xs h-8 px-2"
+                    className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300 rounded-xl text-xs h-9 px-2 shadow-sm"
                     onClick={() => setSupplierResponseModal({ open: true, demandeId: dem.id, decision: 'refuser', prix: '', motif_refus: '' })}
                   >
-                    Simuler Refuser
+                    Saisir Refus
                   </Button>
                 </div>
               </CardContent>
@@ -234,10 +268,10 @@ export default function DemandesPiecesAchatPage() {
                 </div>
                 <div className="text-xs font-semibold text-slate-600 bg-white p-2 rounded-lg border border-slate-100 flex items-center justify-between">
                   <span>Prix fixé:</span>
-                  <span className="text-emerald-600">{dem.prix_fournisseur || '0.00'} DH</span>
+                  <span className="text-emerald-600">{dem.prix_fournisseur || '0.00'} DT</span>
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-2"
                   onClick={() => setReceiveModal({ open: true, demandeId: dem.id, quantite_livree: dem.quantite, numero_facture: '' })}
                 >
@@ -251,7 +285,49 @@ export default function DemandesPiecesAchatPage() {
       </div>
 
       {/* --- MODALS --- */}
-      
+
+      {/* Create Demande Modal */}
+      {createModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
+            <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">Nouvelle Demande d'Achat</h3>
+              <button className="text-slate-400 hover:text-white" onClick={() => setCreateModal({ open: false, pieceId: '', quantite: 1 })}><X className="h-5 w-5" /></button>
+            </div>
+            <form onSubmit={handleCreateDemande} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Pièce à commander</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  value={createModal.pieceId}
+                  onChange={(e) => setCreateModal(prev => ({ ...prev, pieceId: e.target.value }))}
+                  required
+                >
+                  <option value="">Sélectionner une pièce...</option>
+                  {pieces.map(p => (
+                    <option key={p.id} value={p.id}>{p.nom} (Stock: {p.quantite_stock})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Quantité demandée</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  value={createModal.quantite}
+                  onChange={(e) => setCreateModal(prev => ({ ...prev, quantite: e.target.value }))}
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={loading || !createModal.pieceId} className="w-full rounded-xl p-6 text-md font-bold bg-blue-600 hover:bg-blue-700 text-white">
+                Créer la demande
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Assign Fournisseur Modal */}
       {assignModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
@@ -263,7 +339,7 @@ export default function DemandesPiecesAchatPage() {
             <form onSubmit={handleAssignFournisseur} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Choisir le fournisseur</label>
-                <select 
+                <select
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   value={assignModal.fournisseurId}
                   onChange={(e) => setAssignModal(prev => ({ ...prev, fournisseurId: e.target.value }))}
@@ -283,20 +359,20 @@ export default function DemandesPiecesAchatPage() {
         </div>
       )}
 
-      {/* Supplier Response Modal (SIMULATION) */}
+      {/* Supplier Response Modal (MANUAL ENTRY) */}
       {supplierResponseModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
             <div className={`px-6 py-4 flex items-center justify-between ${supplierResponseModal.decision === 'accepter' ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-              <h3 className="text-lg font-bold text-white">Simulation: {supplierResponseModal.decision === 'accepter' ? 'Accepter Demande' : 'Refuser Demande'}</h3>
+              <h3 className="text-lg font-bold text-white">Saisie Manuelle: {supplierResponseModal.decision === 'accepter' ? 'Accord Fournisseur' : 'Refus Fournisseur'}</h3>
               <button className="text-white/70 hover:text-white" onClick={() => setSupplierResponseModal({ open: false, demandeId: null, decision: '', prix: '', motif_refus: '' })}><X className="h-5 w-5" /></button>
             </div>
             <form onSubmit={handleSupplierResponse} className="p-6 space-y-4">
-              
+
               {supplierResponseModal.decision === 'accepter' ? (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Prix proposé (DH)</label>
-                  <input 
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Prix unitaire proposé (DT)</label>
+                  <input
                     type="number"
                     step="0.01"
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -308,18 +384,18 @@ export default function DemandesPiecesAchatPage() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Motif de refus</label>
-                  <textarea 
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Motif de refus donné par le fournisseur</label>
+                  <textarea
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none min-h-[100px]"
                     value={supplierResponseModal.motif_refus}
                     onChange={(e) => setSupplierResponseModal(prev => ({ ...prev, motif_refus: e.target.value }))}
                     required
-                    placeholder="Pièce indisponible, rupture stock mondiale..."
+                    placeholder="Ex: Pièce indisponible chez le fabricant..."
                   />
                 </div>
               )}
-              <Button type="submit" disabled={loading} className="w-full rounded-xl p-6 text-md font-bold">
-                Valider la réponse mockée
+              <Button type="submit" disabled={loading} className={`w-full rounded-xl p-6 text-md font-bold text-white shadow-md ${supplierResponseModal.decision === 'accepter' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
+                Enregistrer la réponse
               </Button>
             </form>
           </div>
@@ -337,7 +413,7 @@ export default function DemandesPiecesAchatPage() {
             <form onSubmit={handleReceiveDelivery} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Quantité livrée</label>
-                <input 
+                <input
                   type="number"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   value={receiveModal.quantite_livree}
@@ -347,7 +423,7 @@ export default function DemandesPiecesAchatPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Numéro Facture Fournisseur (Nouveau)</label>
-                <input 
+                <input
                   type="text"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   value={receiveModal.numero_facture}

@@ -22,6 +22,7 @@ import {
   getRouteForRole,
   getStoredAuth,
   isAuthValid,
+  normalizeRole,
 } from './lib/auth'
 
 import FournisseurLayout from './pages/roles/fournisseur/FournisseurLayout'
@@ -35,8 +36,9 @@ function ProtectedRoute({ children, allowedRole }) {
     return <Navigate to="/login" replace />
   }
 
-  if (allowedRole && auth.role !== allowedRole) {
-    return <Navigate to={getRouteForRole(auth.role)} replace />
+  const normalizedUserRole = normalizeRole(auth.role)
+  if (allowedRole && normalizedUserRole !== allowedRole) {
+    return <Navigate to={getRouteForRole(normalizedUserRole)} replace />
   }
 
   return children

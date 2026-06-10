@@ -1,4 +1,4 @@
-import { ArrowLeft, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus, RefreshCw, Search, Trash2, X, AlertTriangle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -116,6 +116,7 @@ function EntityCrudPage() {
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
 
   const loadRows = useCallback(async () => {
     if (!entity || !entityService) {
@@ -304,7 +305,8 @@ function EntityCrudPage() {
     }
   }
 
-  const deleteRow = async (rowId) => {
+  const confirmDelete = async () => {
+    const rowId = deleteModalState.row?.id
     if (!entity || !entityService || !rowId) {
       return
     }
@@ -314,6 +316,7 @@ function EntityCrudPage() {
     try {
       await entityService.remove(rowId)
       await loadRows()
+      setDeleteModalState({ isOpen: false, row: null })
     } catch (requestError) {
       setError(extractApiErrorMessage(requestError, t('Unable to delete record.')))
     } finally {
@@ -450,7 +453,7 @@ function EntityCrudPage() {
                           size="sm"
                           variant="ghost"
                           className="h-8 px-2 text-rose-600 hover:bg-rose-50"
-                          onClick={() => deleteRow(row.id)}
+                          onClick={() => setDeleteModalState({ isOpen: true, row })}
                           disabled={deletingId === row.id}
                         >
                           <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Supprimer
@@ -509,7 +512,7 @@ function EntityCrudPage() {
                     size="sm"
                     variant="ghost"
                     className="h-8 px-2 text-rose-600 hover:bg-rose-50"
-                    onClick={() => deleteRow(row.id)}
+                    onClick={() => setDeleteModalState({ isOpen: true, row })}
                     disabled={deletingId === row.id}
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Supprimer
@@ -709,6 +712,30 @@ function EntityCrudPage() {
           </div>
         </div>
       ) : null}
+
+      {deleteModalState.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 mb-4">
+                <AlertTriangle className="h-8 w-8 text-rose-600 dark:text-rose-400" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Confirmer la suppression</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">
+                Êtes-vous sûr de vouloir supprimer l'élément <strong className="text-slate-800 dark:text-slate-200">{displayValue(deleteModalState.row?.nom || deleteModalState.row?.nom_complet || deleteModalState.row?.username || deleteModalState.row?.id)}</strong> ? Cette action est irréversible.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
+                  Annuler
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
+                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -86,7 +86,6 @@ function ChefStockOverviewPage() {
       ['demande-pieces', entityServices['demande-pieces']?.list?.()],
       ['fournisseurs', entityServices.fournisseurs?.list?.()],
       ['commandes-pieces', entityServices['commandes-pieces']?.list?.()],
-      ['prix-fournisseurs', entityServices['prix-fournisseurs']?.list?.()],
     ]
 
     try {
@@ -103,13 +102,23 @@ function ChefStockOverviewPage() {
         if (result.status === 'fulfilled') {
           nextCounts[key] = Array.isArray(result.value) ? result.value.length : 0
           nextErrors[key] = ''
+          
+          if (key === 'demande-pieces') {
+            nextCounts['prix-fournisseurs'] = Array.isArray(result.value) ? result.value.filter(d => d.statut === 'livree').length : 0
+          }
         } else {
           nextCounts[key] = 0
           nextErrors[key] = extractApiErrorMessage(result.reason, 'Failed to load')
         }
       })
 
-      nextCounts['achat-piece'] = (nextCounts.fournisseurs || 0) + (nextCounts['commandes-pieces'] || 0) + (nextCounts['prix-fournisseurs'] || 0)
+      // Count the active tracking commands for achat-piece
+      const demandes = settled.find((s, i) => requests[i][0] === 'demande-pieces')?.value || []
+      const piecesHorsStock = demandes.filter(d => 
+        ['hors_stock', 'en_attente_fournisseur', 'acceptee_fournisseur', 'refusee_fournisseur'].includes(d.statut)
+      ).length
+
+      nextCounts['achat-piece'] = (nextCounts.fournisseurs || 0) + piecesHorsStock + (nextCounts['prix-fournisseurs'] || 0)
       nextErrors['achat-piece'] = nextErrors.fournisseurs || nextErrors['commandes-pieces'] || nextErrors['prix-fournisseurs'] || ''
 
       setCounts(nextCounts)
@@ -253,8 +262,8 @@ function ChefStockOverviewPage() {
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
                       {[
                         { label: 'Fournisseurs', value: counts.fournisseurs || 0 },
-                        { label: 'Commandes', value: counts['commandes-pieces'] || 0 },
-                        { label: 'Prix', value: counts['prix-fournisseurs'] || 0 },
+                        { label: 'Commandes', value: (counts['demande-pieces'] !== undefined) ? counts['demande-pieces'] : 0 },
+                        { label: 'Factures', value: counts['prix-fournisseurs'] || 0 },
                       ].map((item) => (
                         <div key={item.label} className="rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/70">
                           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{item.label}</p>
@@ -270,71 +279,7 @@ function ChefStockOverviewPage() {
         })}
       </motion.div>
 
-      <motion.div variants={itemVariants} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="overflow-hidden rounded-2xl border border-slate-200/80 bg-linear-to-br from-white to-emerald-50/40 shadow-sm dark:border-slate-700/60 dark:from-slate-900 dark:to-emerald-950/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-slate-100">
-              <BarChart3 className="h-4 w-4 text-emerald-500" />
-              Vue globale du chef de stock
-            </CardTitle>
-            <CardDescription>Résumé de l’activité et des accès disponibles</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            {[
-              { label: 'Pièces', value: counts.pieces || 0, note: 'Stock réel' },
-              { label: 'Demandes', value: counts['demande-pieces'] || 0, note: 'Pièces demandées' },
-              { label: 'Achat', value: primaryCount, note: 'Fournisseurs, commandes, prix' },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm dark:border-slate-700/50 dark:bg-slate-900/70">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{item.label}</p>
-                <p className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">{loading ? '...' : item.value}</p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.note}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
 
-        <Card className="rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/85">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-slate-100">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              Accès rapides
-            </CardTitle>
-            <CardDescription>Entrer directement dans un module</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {visibleModules.map((module) => {
-              const details = MODULE_DETAILS[module.key] ?? MODULE_DETAILS.pieces
-              const Icon = details.icon
-
-              return (
-                <Button
-                  key={module.key}
-                  onClick={() => navigate(roleModulePath('chefstock', module.key))}
-                  variant="outline"
-                  className="w-full justify-start gap-2 rounded-xl border-slate-200 bg-white/80 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <Icon className="h-4 w-4" />
-                  {module.label}
-                </Button>
-              )
-            })}
-
-            <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                <Clock className="h-4 w-4" />
-                Dernière synchronisation
-              </div>
-              <p className="mt-2 text-sm text-emerald-700/80 dark:text-emerald-200/80">
-                {syncedAt || 'Aucune synchronisation pour le moment'}
-              </p>
-              <p className="mt-1 text-xs text-emerald-700/70 dark:text-emerald-200/70">
-                {baseTotal} enregistrements au total, {lowStockCount} articles à surveiller
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
     </motion.div>
   )
 }

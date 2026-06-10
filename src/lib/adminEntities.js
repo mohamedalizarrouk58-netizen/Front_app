@@ -81,6 +81,19 @@ export const ADMIN_ENTITIES = [
     ],
   },
   {
+    key: 'categories-materiel',
+    label: 'Catégories Matériel',
+    icon: Tags,
+    serviceKey: 'categories-materiel',
+    columns: ['id', 'nom', 'description', 'is_active', 'date_creation'],
+    fields: [
+      { key: 'nom', label: 'Nom', type: 'text', required: true },
+      { key: 'description', label: 'Description', type: 'textarea' },
+      { key: 'is_active', label: 'Actif', type: 'boolean' },
+      { key: 'date_creation', label: 'Date de Création', type: 'date', readOnly: true },
+    ],
+  },
+  {
     key: 'materiels',
     label: 'Materiels',
     icon: HardDrive,

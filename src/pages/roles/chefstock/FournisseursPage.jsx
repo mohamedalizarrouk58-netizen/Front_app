@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Search, Pencil, Trash2, X, RefreshCw, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Pencil, Trash2, X, RefreshCw, AlertCircle, AlertTriangle } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -19,6 +19,8 @@ function FournisseursPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
+  const [deletingId, setDeletingId] = useState(null)
   const [formData, setFormData] = useState({
     nom: '',
     email: '',
@@ -93,18 +95,22 @@ function FournisseursPage() {
     setShowForm(true)
   }
 
-  const handleDelete = async (id) => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce fournisseur ?')) {
-      setLoading(true)
-      setError('')
-      try {
-        await entityServices.fournisseurs.delete(id)
-        loadFournisseurs()
-      } catch (err) {
-        setError(extractApiErrorMessage(err, 'Erreur lors de la suppression'))
-      } finally {
-        setLoading(false)
-      }
+  const handleDeleteClick = (fournisseur) => {
+    setDeleteModalState({ isOpen: true, row: fournisseur })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteModalState.row) return
+    setDeletingId(deleteModalState.row.id)
+    setError('')
+    try {
+      await entityServices.fournisseurs.delete(deleteModalState.row.id)
+      loadFournisseurs()
+      setDeleteModalState({ isOpen: false, row: null })
+    } catch (err) {
+      setError(extractApiErrorMessage(err, 'Erreur lors de la suppression'))
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -356,7 +362,7 @@ function FournisseursPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(fournisseur.id)}
+                      onClick={() => handleDeleteClick(fournisseur)}
                     >
                       <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
@@ -372,6 +378,31 @@ function FournisseursPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalState.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 mb-4">
+                <AlertTriangle className="h-8 w-8 text-rose-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Confirmer la suppression</h3>
+              <p className="text-slate-500 mb-6">
+                Êtes-vous sûr de vouloir supprimer le fournisseur <strong className="text-slate-800">{deleteModalState.row?.nom}</strong> ? Cette action est irréversible.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
+                  Annuler
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
+                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

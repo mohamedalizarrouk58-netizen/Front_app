@@ -29,7 +29,7 @@ const ROLE_ALIAS = {
   supplier: 'fournisseur',
 }
 
-function normalizeRole(value) {
+export function normalizeRole(value) {
   if (!value) {
     return ''
   }
@@ -45,7 +45,7 @@ function normalizeRole(value) {
   return ROLE_ALIAS[cleaned] ?? ''
 }
 
-function decodeToken(token) {
+export function decodeToken(token) {
   try {
     return jwtDecode(token)
   } catch {
@@ -53,7 +53,7 @@ function decodeToken(token) {
   }
 }
 
-function extractRoleFromPayload(payload) {
+export function extractRoleFromPayload(payload) {
   if (!payload) {
     return ''
   }
@@ -77,7 +77,7 @@ function extractRoleFromPayload(payload) {
   return ''
 }
 
-function extractUserIdFromPayload(payload) {
+export function extractUserIdFromPayload(payload) {
   if (!payload) {
     return null
   }
@@ -220,20 +220,22 @@ export function getStoredAuth() {
 
     const parsed = JSON.parse(rawValue)
 
-    if (parsed?.userId) {
+    if (parsed?.userId && parsed?.role) {
       return parsed
     }
 
     const decodedAccess = decodeToken(parsed?.access)
     const derivedUserId = extractUserIdFromPayload(decodedAccess)
+    const derivedRole = normalizeRole(parsed?.role) || extractRoleFromPayload(decodedAccess)
 
-    if (!derivedUserId) {
+    if (!derivedUserId && !derivedRole) {
       return parsed
     }
 
     const enrichedAuth = {
       ...parsed,
-      userId: derivedUserId,
+      userId: parsed?.userId ?? derivedUserId,
+      role: parsed?.role ?? derivedRole,
     }
 
     storeAuth(enrichedAuth)
@@ -360,4 +362,79 @@ export async function loginWithCredentials({ username, password }) {
 
   storeAuth(authData)
   return authData
+}
+
+export async function registerUser({ username, password, email, role, telephone, first_name, last_name }) {
+  try {
+    const response = await api.post('/api/users/register/', {
+      username,
+      password,
+      email,
+      role,
+      telephone,
+      first_name,
+      last_name,
+    }, {
+      skipAuth: true,
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, 'Registration failed.'))
+  }
+}
+
+// ===== OTP / EMAIL AUTH =====
+
+export async function sendOtp({ email, purpose }) {
+  try {
+    const response = await api.post('/api/auth/send-otp/', { email, purpose }, { skipAuth: true })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, 'Impossible d\'envoyer le code.'))
+  }
+}
+
+export async function resetPassword({ email, code, new_password }) {
+  try {
+    const response = await api.post('/api/auth/reset-password/', { email, code, new_password }, { skipAuth: true })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, 'Réinitialisation échouée.'))
+  }
+}
+
+export async function send2faOtpForLogin({ username, password }) {
+  try {
+    const response = await api.post('/api/auth/send-2fa-otp/', { username, password }, { skipAuth: true })
+    return response.data  // { requires_2fa, email_hint? } or { access, refresh, role, username }
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, 'Identifiants invalides.'))
+  }
+}
+
+export async function loginWith2fa({ username, code }) {
+  try {
+    const response = await api.post('/api/auth/login-2fa/', { username, code }, { skipAuth: true })
+    return response.data  // { access, refresh, role, username }
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, 'Code invalide ou expiré.'))
+  }
+}
+
+export async function toggle2fa(enabled) {
+  try {
+    const response = await api.post('/api/auth/toggle-2fa/', { enabled })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiErrorMessage(error, 'Impossible de modifier le paramètre 2FA.'))
+  }
+}
+
+export async function get2faStatus() {
+  try {
+    const response = await api.get('/api/auth/2fa-status/')
+    return response.data  // { two_factor_enabled: bool }
+  } catch {
+    return { two_factor_enabled: false }
+  }
 }

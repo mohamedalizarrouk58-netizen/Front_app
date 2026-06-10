@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Search, Pencil, Trash2, X, RefreshCw, AlertCircle, Eye } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Pencil, Trash2, X, RefreshCw, AlertCircle, Eye, AlertTriangle } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -28,6 +28,8 @@ function CommandesPiecesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
+  const [deletingId, setDeletingId] = useState(null)
   const [selectedDetail, setSelectedDetail] = useState(null)
   const [formData, setFormData] = useState({
     numero_commande: '',
@@ -102,18 +104,22 @@ function CommandesPiecesPage() {
     setShowForm(true)
   }
 
-  const handleDelete = async (id) => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer cette commande ?')) {
-      setLoading(true)
-      setError('')
-      try {
-        await entityServices['commandes-pieces'].delete(id)
-        loadData()
-      } catch (err) {
-        setError(extractApiErrorMessage(err, 'Erreur lors de la suppression'))
-      } finally {
-        setLoading(false)
-      }
+  const handleDeleteClick = (commande) => {
+    setDeleteModalState({ isOpen: true, row: commande })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteModalState.row) return
+    setDeletingId(deleteModalState.row.id)
+    setError('')
+    try {
+      await entityServices['commandes-pieces'].delete(deleteModalState.row.id)
+      loadData()
+      setDeleteModalState({ isOpen: false, row: null })
+    } catch (err) {
+      setError(extractApiErrorMessage(err, 'Erreur lors de la suppression'))
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -343,7 +349,7 @@ function CommandesPiecesPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Montant total</p>
-                <p className="font-medium">{selectedDetail.montant_total} DH</p>
+                <p className="font-medium">{selectedDetail.montant_total} DT</p>
               </div>
             </div>
             {selectedDetail.remarques && (
@@ -379,7 +385,7 @@ function CommandesPiecesPage() {
                     {getStatutBadge(commande.statut).label}
                   </Badge>
                 </td>
-                <td className="px-4 py-3 text-sm">{commande.montant_total} DH</td>
+                <td className="px-4 py-3 text-sm">{commande.montant_total} DT</td>
                 <td className="px-4 py-3 text-sm">
                   {new Date(commande.date_commande).toLocaleDateString()}
                 </td>
@@ -402,7 +408,7 @@ function CommandesPiecesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(commande.id)}
+                      onClick={() => handleDeleteClick(commande)}
                     >
                       <Trash2 className="h-4 w-4 text-red-600" />
                     </Button>
@@ -418,6 +424,31 @@ function CommandesPiecesPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalState.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 mb-4">
+                <AlertTriangle className="h-8 w-8 text-rose-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Confirmer la suppression</h3>
+              <p className="text-slate-500 mb-6">
+                Êtes-vous sûr de vouloir supprimer la commande <strong className="text-slate-800">{deleteModalState.row?.numero_commande}</strong> ? Cette action est irréversible.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
+                  Annuler
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
+                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

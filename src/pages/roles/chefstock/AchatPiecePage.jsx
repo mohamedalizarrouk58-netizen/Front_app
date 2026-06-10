@@ -29,21 +29,22 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
     setError('')
 
     try {
-    const [fournisseurs, commandes, prix, demandesPieces] = await Promise.all([
+    const [fournisseurs, commandes, demandesPieces] = await Promise.all([
         entityServices.fournisseurs?.list?.() ?? [],
         entityServices['commandes-pieces']?.list?.() ?? [],
-        entityServices['prix-fournisseurs']?.list?.() ?? [],
         entityServices['demande-pieces']?.list?.() ?? [],
       ])
 
       const piecesHorsStock = demandesPieces.filter(d => 
         ['hors_stock', 'en_attente_fournisseur', 'acceptee_fournisseur', 'refusee_fournisseur'].includes(d.statut)
       )
+      
+      const facturesCount = demandesPieces.filter(d => d.statut === 'livree').length
 
       setCounts({
         fournisseurs: Array.isArray(fournisseurs) ? fournisseurs.length : 0,
-        commandes: piecesHorsStock.length, // replaced with trackings
-        prix: Array.isArray(prix) ? prix.length : 0,
+        commandes: piecesHorsStock.length, // tracking en cours
+        prix: facturesCount,
       })
     } catch (requestError) {
       setError(extractApiErrorMessage(requestError, 'Impossible de charger les indicateurs Achat Pièce.'))
@@ -80,8 +81,8 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
       },
       {
         key: 'prix',
-        title: 'Prix fournisseurs',
-        description: 'Tarification, délais et minima de commande.',
+        title: 'Factures fournisseurs',
+        description: 'Historique des factures et montants payés.',
         value: counts.prix,
         icon: Tag,
         className: 'from-emerald-500 to-teal-500',
@@ -156,50 +157,7 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
         })}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-2xl border-slate-200/80">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CircleDollarSign className="h-5 w-5 text-emerald-600" />
-              Focus opérationnel
-            </CardTitle>
-            <CardDescription>Pipeline achat conseillé pour l’équipe stock.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              '1. Vérifier les besoins depuis les demandes de pièces',
-              '2. Comparer les tarifs dans Prix fournisseurs',
-              '3. Lancer ou mettre à jour les Commandes de pièces',
-              '4. Suivre la réception avec les Fournisseurs',
-            ].map((step) => (
-              <div key={step} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                {step}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
 
-        <Card className="rounded-2xl border-slate-200/80 bg-slate-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-slate-700" />
-              Navigation rapide
-            </CardTitle>
-            <CardDescription>Accéder directement aux pages métier.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/${rolePath}/fournisseurs`)}>
-              Fournisseurs
-            </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/${rolePath}/suivi-achat`)}>
-              Track Achat Pièces (Workflow)
-            </Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/${rolePath}/prix`)}>
-              Prix fournisseurs
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
     </div>
   )
 }

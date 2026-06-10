@@ -25,7 +25,7 @@ export default function FournisseurDashboardPage() {
         demandePiecesService.list(),
         entityServices.pieces.list(),
       ])
-      
+
       setDemandes(dems)
       setPieces(pcs)
     } catch (err) {
@@ -45,10 +45,10 @@ export default function FournisseurDashboardPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const payload = responseModal.decision === 'accepter' 
-        ? { prix: responseModal.prix } 
+      const payload = responseModal.decision === 'accepter'
+        ? { prix: responseModal.prix }
         : { motif_refus: responseModal.motif_refus }
-        
+
       await demandePiecesService.reponseFournisseur(responseModal.demandeId, responseModal.decision, payload)
       setResponseModal({ open: false, demandeId: null, pieceName: '', decision: '', prix: '', motif_refus: '' })
       loadData()
@@ -84,7 +84,7 @@ export default function FournisseurDashboardPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
+
         {/* EN ATTENTE */}
         <Card className="rounded-3xl border-0 shadow-xl shadow-slate-200/50 bg-white overflow-hidden">
           <div className="h-2 bg-amber-500 w-full" />
@@ -110,14 +110,14 @@ export default function FournisseurDashboardPage() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-4">
-                      <Button 
+                      <Button
                         onClick={() => setResponseModal({ open: true, demandeId: dem.id, pieceName: getPieceName(dem.piece), decision: 'accepter', prix: '', motif_refus: '' })}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl gap-2"
                       >
                         <Check className="h-4 w-4" />
                         Accepter
                       </Button>
-                      <Button 
+                      <Button
                         onClick={() => setResponseModal({ open: true, demandeId: dem.id, pieceName: getPieceName(dem.piece), decision: 'refuser', prix: '', motif_refus: '' })}
                         variant="outline"
                         className="border-rose-200 text-rose-700 hover:bg-rose-50 rounded-xl gap-2"
@@ -159,7 +159,7 @@ export default function FournisseurDashboardPage() {
                     </div>
                     <div className="text-sm font-medium text-slate-600 flex justify-between bg-slate-50 p-2 rounded-lg">
                       <span>Quantité: {dem.quantite}</span>
-                      <span className="text-emerald-600">{dem.prix_fournisseur} DH</span>
+                      <span className="text-emerald-600">{dem.prix_fournisseur} DT</span>
                     </div>
                   </li>
                 ))}
@@ -179,7 +179,7 @@ export default function FournisseurDashboardPage() {
               </h3>
               <button className="text-white/70 hover:text-white" onClick={() => setResponseModal({ open: false, demandeId: null, pieceName: '', decision: '', prix: '', motif_refus: '' })}><X className="h-5 w-5" /></button>
             </div>
-            
+
             <form onSubmit={handleSubmitResponse} className="p-6 space-y-4">
               <div className="mb-4">
                 <p className="font-medium text-slate-900">{responseModal.pieceName}</p>
@@ -187,8 +187,8 @@ export default function FournisseurDashboardPage() {
 
               {responseModal.decision === 'accepter' ? (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Votre Prix unitaire (DH) *</label>
-                  <input 
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Votre Prix unitaire (DT) *</label>
+                  <input
                     type="number"
                     step="0.01"
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -202,7 +202,7 @@ export default function FournisseurDashboardPage() {
               ) : (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Motif du refus *</label>
-                  <textarea 
+                  <textarea
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none min-h-[100px]"
                     value={responseModal.motif_refus}
                     onChange={(e) => setResponseModal(prev => ({ ...prev, motif_refus: e.target.value }))}
@@ -212,12 +212,11 @@ export default function FournisseurDashboardPage() {
                 </div>
               )}
 
-              <Button 
-                type="submit" 
-                disabled={loading || (responseModal.decision === 'accepter' && !responseModal.prix) || (responseModal.decision === 'refuser' && !responseModal.motif_refus)} 
-                className={`w-full rounded-xl p-6 text-md font-bold mt-4 ${
-                  responseModal.decision === 'accepter' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
-                }`}
+              <Button
+                type="submit"
+                disabled={loading || (responseModal.decision === 'accepter' && !responseModal.prix) || (responseModal.decision === 'refuser' && !responseModal.motif_refus)}
+                className={`w-full rounded-xl p-6 text-md font-bold mt-4 ${responseModal.decision === 'accepter' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
               >
                 Confirmer la décision
               </Button>
