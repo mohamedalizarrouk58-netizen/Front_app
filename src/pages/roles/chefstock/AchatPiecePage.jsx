@@ -9,12 +9,14 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { extractApiErrorMessage } from '../../../lib/api'
 import { entityServices } from '../../../services/entities'
 
 function AchatPiecePage({ rolePath = 'chefstock' }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [counts, setCounts] = useState({
     fournisseurs: 0,
@@ -63,8 +65,8 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
     () => [
       {
         key: 'fournisseurs',
-        title: 'Fournisseurs',
-        description: 'Partenaires, contacts et disponibilité.',
+        title: t('achat.fournisseurs'),
+        description: t('achat.fournisseursDesc'),
         value: counts.fournisseurs,
         icon: Truck,
         className: 'from-sky-600 to-cyan-500',
@@ -72,8 +74,8 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
       },
       {
         key: 'commandes',
-        title: 'Suivi Achat Pièces',
-        description: 'Demandes hors stock et attente de fournisseurs.',
+        title: t('achat.suivi'),
+        description: t('achat.suiviDesc'),
         value: counts.commandes,
         icon: ClipboardList,
         className: 'from-amber-500 to-orange-500',
@@ -81,15 +83,15 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
       },
       {
         key: 'prix',
-        title: 'Factures fournisseurs',
-        description: 'Historique des factures et montants payés.',
+        title: t('achat.factures'),
+        description: t('achat.facturesDesc'),
         value: counts.prix,
         icon: Tag,
         className: 'from-emerald-500 to-teal-500',
         action: () => navigate(`/${rolePath}/prix`),
       },
     ],
-    [counts, navigate, rolePath],
+    [counts, navigate, rolePath, t],
   )
 
   return (
@@ -109,12 +111,12 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
 
           <div className="flex items-center gap-3">
             <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-300">Total achat</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-300">{t('achat.title')}</p>
               <p className="mt-1 text-3xl font-black">{loading ? '...' : total}</p>
             </div>
             <Button onClick={loadCounts} disabled={loading} className="rounded-xl bg-white text-slate-900 hover:bg-slate-100 gap-2">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Recharger
+              {t('crud.refresh')}
             </Button>
           </div>
         </div>

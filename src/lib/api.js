@@ -1,6 +1,5 @@
 import axios from 'axios'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+import { API_BASE_URL } from './apiConfig'
 const AUTH_STORAGE_KEY = 'gestionmt_auth'
 
 function getAccessTokenFromStorage() {
@@ -29,6 +28,11 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers = config.headers ?? {}
+    delete config.headers['Content-Type']
+  }
+
   const shouldSkipAuth = config.skipAuth || isAuthEndpoint(config.url)
 
   if (shouldSkipAuth) {
@@ -71,6 +75,21 @@ export function extractApiErrorMessage(error, fallbackMessage) {
 
     if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length > 0) {
       return String(data.non_field_errors[0])
+    }
+
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const fieldMessages = Object.entries(data)
+        .filter(([key]) => key !== 'detail' && key !== 'message')
+        .map(([key, value]) => {
+          const msg = Array.isArray(value) ? value[0] : value
+          if (!msg) return ''
+          return `${key}: ${msg}`
+        })
+        .filter(Boolean)
+
+      if (fieldMessages.length > 0) {
+        return fieldMessages.join(' · ')
+      }
     }
 
     if (typeof error.message === 'string' && error.message.trim()) {

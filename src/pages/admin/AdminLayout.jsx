@@ -1,12 +1,16 @@
-import { LayoutDashboard, LogOut, UserRound, Sparkles, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, LogOut, Sparkles, ChevronRight } from 'lucide-react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { ThemeToggle } from '../../components/ThemeToggle'
+import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 import { clearAuth, getStoredAuth } from '../../lib/auth'
 import { ADMIN_ENTITIES, adminEntityPath } from '../../lib/adminEntities'
+import { tEntity } from '../../lib/i18nLabels'
 import { motion, AnimatePresence } from 'framer-motion'
+import NavbarMessagesButton from '../../components/messaging/NavbarMessagesButton'
+import MessengerDock from '../../components/messaging/MessengerDock'
+import ConnectedUserCard from '../../components/ConnectedUserCard'
 
 function AdminLayout() {
   const { t } = useTranslation()
@@ -83,7 +87,7 @@ function AdminLayout() {
               <NavLink
                 key={entity.key}
                 to={targetPath}
-                aria-label={entity.label}
+                aria-label={tEntity(entity.key)}
                 className={({ isActive }) =>
                   `group relative flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300 ${
                     isActive
@@ -110,7 +114,10 @@ function AdminLayout() {
             )
           })}
         </nav>
-        <ThemeToggle />
+        <div className="flex flex-col items-center gap-2">
+          <LanguageSwitcher />
+          <ThemeToggle />
+        </div>
       </aside>
 
       {/* Desktop Fluid Sidebar */}
@@ -193,7 +200,7 @@ function AdminLayout() {
                         )}
                         <span className="relative z-10 flex items-center gap-3 font-medium">
                           <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-[#1ea0d6]'}`} />
-                          {entity.label}
+                          {tEntity(entity.key)}
                         </span>
                         {isActive && <ChevronRight className="relative z-10 h-4 w-4 text-white/70" />}
                       </>
@@ -217,27 +224,11 @@ function AdminLayout() {
             className="mb-8 rounded-2xl bg-white/70 dark:bg-slate-900/70 border border-slate-200/60 dark:border-slate-800/60 p-4 backdrop-blur-xl shadow-sm"
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#145f7a]/10 dark:bg-[#1ea0d6]/10 text-[#145f7a] dark:text-[#1ea0d6]">
-                  <UserRound className="h-6 w-6" />
-                </div>
-
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    {t('Connected User')}
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <p className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">
-                      {auth?.username ?? 'Admin'}
-                    </p>
-                    <Badge className="bg-[#145f7a]/10 text-[#145f7a] hover:bg-[#145f7a]/20 border-0 dark:bg-[#1ea0d6]/10 dark:text-[#1ea0d6] dark:hover:bg-[#1ea0d6]/20">
-                      {t('role.admin')}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
+              <ConnectedUserCard />
 
               <div className="flex h-full items-center gap-3">
+                <NavbarMessagesButton />
+                <LanguageSwitcher />
                 <ThemeToggle />
                 <div className="w-px h-8 bg-slate-200 dark:bg-slate-800"></div>
                 <Button 
@@ -246,7 +237,7 @@ function AdminLayout() {
                   className="rounded-xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  Deconnexion
+                  {t('nav.logout')}
                 </Button>
               </div>
             </div>
@@ -265,6 +256,8 @@ function AdminLayout() {
           </AnimatePresence>
         </div>
       </section>
+
+      <MessengerDock />
     </main>
   )
 }

@@ -16,6 +16,10 @@ const demandePiecesService = {
   receptionLivraison: async (id, payload) => {
     const response = await api.post(`/api/demande-pieces/${id}/reception-livraison/`, payload)
     return response.data
+  },
+  livrerStock: async (id) => {
+    const response = await api.post(`/api/demande-pieces/${id}/livrer-stock/`)
+    return response.data
   }
 }
 

@@ -82,7 +82,7 @@ export const ROLE_WORKSPACES = {
         icon: ClipboardList,
         columns: ['id', 'materiel', 'receptioniste', 'manager', 'priorite', 'statut', 'date_creation'],
         permissions: { create: false, update: true, delete: false },
-        editableFields: ['materiel', 'receptioniste', 'manager', 'priorite', 'statut'],
+        editableFields: ['materiel', 'receptioniste', 'manager', 'priorite'],
         readOnlyFields: ['materiel', 'receptioniste', 'manager', 'priorite'],
       },
       {
@@ -92,7 +92,7 @@ export const ROLE_WORKSPACES = {
         icon: Wrench,
         columns: ['id', 'demande', 'technicien', 'diagnostic', 'statut', 'date_debut', 'date_fin'],
         permissions: { create: true, update: true, delete: false },
-        editableFields: ['demande', 'technicien', 'diagnostic', 'solution_proposee', 'date_debut', 'date_fin', 'statut'],
+        editableFields: ['demande', 'technicien', 'diagnostic', 'solution_proposee', 'date_debut', 'date_fin'],
       },
       {
         key: 'fiche-reparations',
@@ -105,6 +105,8 @@ export const ROLE_WORKSPACES = {
           'description_panne',
           'solution',
           'cout_main_oeuvre',
+          'frais_societe',
+          'prix_supplementaire',
           'confirmation',
           'valide_manager',
         ],
@@ -114,6 +116,8 @@ export const ROLE_WORKSPACES = {
           'description_panne',
           'solution',
           'cout_main_oeuvre',
+          'frais_societe',
+          'prix_supplementaire',
           'confirmation',
           'valide_manager',
         ],
@@ -153,7 +157,7 @@ export const ROLE_WORKSPACES = {
         columns: ['id', 'demande', 'technicien', 'diagnostic', 'solution_proposee', 'statut'],
         useMineEndpoint: true,
         permissions: { create: false, update: true, delete: false },
-        editableFields: ['demande', 'technicien', 'diagnostic', 'solution_proposee', 'statut', 'date_debut', 'date_fin'],
+        editableFields: ['demande', 'technicien', 'diagnostic', 'solution_proposee', 'date_debut', 'date_fin'],
         readOnlyFields: ['demande', 'technicien', 'date_debut', 'date_fin'],
       },
       {
@@ -196,7 +200,7 @@ export const ROLE_WORKSPACES = {
         icon: ClipboardList,
         columns: ['id', 'fiche', 'piece', 'quantite', 'statut', 'date_demande'],
         permissions: { create: false, update: true, delete: false },
-        editableFields: ['statut'],
+        editableFields: [],
       },
       {
         key: 'achat-piece',
@@ -256,7 +260,7 @@ export const ROLE_WORKSPACES = {
         icon: ReceiptText,
         columns: ['id', 'intervention', 'client', 'montant_total', 'date_facture', 'est_payee'],
         permissions: { create: false, update: true, delete: false },
-        editableFields: ['intervention', 'client', 'montant_total', 'date_facture', 'est_payee'],
+        editableFields: ['intervention', 'client', 'montant_total', 'date_facture'],
         readOnlyFields: ['intervention', 'client', 'montant_total', 'date_facture'],
       },
       {
@@ -279,22 +283,25 @@ export function roleDashboardPath(role) {
   return `/${role}`
 }
 
+const ACHAT_SUB_ROUTES = {
+  fournisseurs: 'fournisseurs',
+  'commandes-pieces': 'commandes',
+  commandes: 'commandes',
+  'prix-fournisseurs': 'prix',
+  prix: 'prix',
+  'suivi-achat': 'suivi-achat',
+}
+
 export function roleModulePath(role, moduleKey) {
-  if ((role === 'chefstock' || role === 'administrateur') && moduleKey === 'achat-piece') {
-    return `/${role}/achat-piece`
+  const baseRole = role === 'administrateur' ? 'admin' : role
+
+  if ((baseRole === 'chefstock' || baseRole === 'admin') && moduleKey === 'achat-piece') {
+    return `/${baseRole}/achat-piece`
   }
 
-  if (role === 'chefstock') {
-    const chefstockRoutes = {
-      fournisseurs: '/chefstock/fournisseurs',
-      'commandes-pieces': '/chefstock/commandes',
-      'prix-fournisseurs': '/chefstock/prix',
-    }
-
-    if (chefstockRoutes[moduleKey]) {
-      return chefstockRoutes[moduleKey]
-    }
+  if (ACHAT_SUB_ROUTES[moduleKey] && (baseRole === 'chefstock' || baseRole === 'admin')) {
+    return `/${baseRole}/${ACHAT_SUB_ROUTES[moduleKey]}`
   }
 
-  return `/${role}/modules/${moduleKey}`
+  return `/${baseRole}/modules/${moduleKey}`
 }

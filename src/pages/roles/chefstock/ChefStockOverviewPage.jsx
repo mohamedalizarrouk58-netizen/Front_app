@@ -13,11 +13,13 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { extractApiErrorMessage } from '../../../lib/api'
 import { ROLE_WORKSPACES, roleModulePath } from '../../../lib/roleWorkspaces'
+import { tModule } from '../../../lib/i18nLabels'
 import { entityServices } from '../../../services/entities'
 
 const containerVariants = {
@@ -39,36 +41,37 @@ const MODULE_DETAILS = {
     accent: 'from-sky-500 to-cyan-500',
     color: 'text-sky-600 dark:text-sky-400',
     bgColor: 'bg-sky-50 dark:bg-sky-900/20',
-    hint: 'Catalogue et disponibilité',
-    description: 'Stock des pièces et suivi des quantités.',
+    hintKey: 'chefstock.piecesHint',
+    descKey: 'chefstock.piecesDesc',
   },
   'categories-materiel': {
     icon: Tag,
     accent: 'from-violet-500 to-fuchsia-500',
     color: 'text-violet-600 dark:text-violet-400',
     bgColor: 'bg-violet-50 dark:bg-violet-900/20',
-    hint: 'Classification du matériel',
-    description: 'Organisation des catégories pour le stock.',
+    hintKey: 'chefstock.categoriesHint',
+    descKey: 'chefstock.categoriesDesc',
   },
   'demande-pieces': {
     icon: ClipboardList,
     accent: 'from-amber-500 to-orange-500',
     color: 'text-amber-600 dark:text-amber-400',
     bgColor: 'bg-amber-50 dark:bg-amber-900/20',
-    hint: 'Demandes en circulation',
-    description: 'Pièces demandées et validation du flux.',
+    hintKey: 'chefstock.demandesHint',
+    descKey: 'chefstock.demandesDesc',
   },
   'achat-piece': {
     icon: Package,
     accent: 'from-emerald-500 to-teal-500',
     color: 'text-emerald-600 dark:text-emerald-400',
     bgColor: 'bg-emerald-50 dark:bg-emerald-900/20',
-    hint: 'Fournisseurs, commandes et prix',
-    description: 'Tous les achats réunis dans un seul module.',
+    hintKey: 'chefstock.achatHint',
+    descKey: 'chefstock.achatDesc',
   },
 }
 
 function ChefStockOverviewPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const workspace = ROLE_WORKSPACES.chefstock
   const [counts, setCounts] = useState({})
@@ -145,8 +148,8 @@ function ChefStockOverviewPage() {
         accent: 'from-slate-500 to-slate-700',
         color: 'text-slate-600 dark:text-slate-400',
         bgColor: 'bg-slate-50 dark:bg-slate-900/20',
-        hint: module.description || 'Module du chef de stock',
-        description: module.description || `Ouvrir ${module.label.toLowerCase()}.`,
+        hintKey: 'module.defaultModuleHint',
+        descKey: 'module.openModule',
       }
 
       return {
@@ -184,31 +187,31 @@ function ChefStockOverviewPage() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
-                  Chef de stock
+                  {t('chefstock.roleBadge')}
                 </Badge>
                 <Badge className="border-slate-200 bg-white/80 text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
-                  {syncedAt ? `Synchronisé à ${syncedAt}` : 'Synchronisation en cours'}
+                  {syncedAt ? t('chefstock.syncedAt', { time: syncedAt }) : t('chefstock.syncing')}
                 </Badge>
                 <Badge className="border-slate-200 bg-white/80 text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
-                  {visibleModules.length} modules
+                  {t('chefstock.moduleCount', { count: visibleModules.length })}
                 </Badge>
               </div>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
-                Dashboard Chef de stock
+                {t('chefstock.dashboardTitle')}
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-400 sm:text-base">
-                Tous les modules du chef de stock sont regroupés ici avec une vue moderne, des accès rapides et les compteurs essentiels pour piloter l’activité.
+                {t('chefstock.dashboardSubtitle')}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/50 bg-white/90 dark:bg-slate-900/90 px-4 py-3 shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Références</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t('common.references')}</p>
               <p className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100">{baseTotal}</p>
             </div>
             <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/50 bg-white/90 dark:bg-slate-900/90 px-4 py-3 shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Achat pièce</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{t('nav.achatPiece')}</p>
               <p className="mt-1 text-2xl font-black text-emerald-600 dark:text-emerald-400">{primaryCount}</p>
             </div>
           </div>
@@ -218,7 +221,7 @@ function ChefStockOverviewPage() {
       {Object.values(errors).some(Boolean) && (
         <motion.div variants={itemVariants} className="rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-800 flex gap-3 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
-          <p>Certains compteurs n’ont pas pu être synchronisés. Les autres modules restent accessibles.</p>
+          <p>{t('common.syncPartialFail')}</p>
         </motion.div>
       )}
 
@@ -238,8 +241,8 @@ function ChefStockOverviewPage() {
                 <CardContent className="relative p-5">
                   <div className="mb-5 flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{module.label}</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{module.hint}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{tModule(module.key)}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{module.hintKey ? t(module.hintKey) : module.hint}</p>
                     </div>
                     <div className={`rounded-2xl p-3 ${module.bgColor} shadow-inner transition-transform duration-300 group-hover:rotate-12`}>
                       <Icon className={`h-5 w-5 ${module.color}`} />
@@ -252,7 +255,7 @@ function ChefStockOverviewPage() {
                         {loading ? <span className="inline-block h-10 w-14 animate-pulse rounded-lg bg-slate-100 dark:bg-white/5" /> : module.value}
                       </p>
                       <p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                        {module.error ? 'Sync issue' : `Ouvrir ${module.label.toLowerCase()}`}
+                        {module.error ? t('module.syncIssue') : t('module.openModule', { module: tModule(module.key) })}
                       </p>
                     </div>
                     <ArrowUpRight className="h-5 w-5 text-slate-300 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-slate-500 dark:text-slate-600 dark:group-hover:text-slate-300" />
@@ -261,9 +264,9 @@ function ChefStockOverviewPage() {
                   {isPrimary ? (
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
                       {[
-                        { label: 'Fournisseurs', value: counts.fournisseurs || 0 },
-                        { label: 'Commandes', value: (counts['demande-pieces'] !== undefined) ? counts['demande-pieces'] : 0 },
-                        { label: 'Factures', value: counts['prix-fournisseurs'] || 0 },
+                        { label: t('nav.fournisseurs'), value: counts.fournisseurs || 0 },
+                        { label: t('chefstock.orders'), value: (counts['demande-pieces'] !== undefined) ? counts['demande-pieces'] : 0 },
+                        { label: t('chefstock.invoices'), value: counts['prix-fournisseurs'] || 0 },
                       ].map((item) => (
                         <div key={item.label} className="rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/70">
                           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{item.label}</p>

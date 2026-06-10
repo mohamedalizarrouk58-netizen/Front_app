@@ -8,4 +8,9 @@ usersService.getCurrent = async function getCurrentUser() {
 	return response.data
 }
 
+usersService.updateMe = async function updateCurrentUser(payload) {
+	const response = await api.patch('/api/users/me/', payload)
+	return response.data
+}
+
 export default usersService

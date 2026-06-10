@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ClipboardList,
   Wrench,
@@ -16,9 +17,18 @@ import { Badge } from '../../components/ui/badge';
 import { motion } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, Cell } from 'recharts';
 import { entityServices } from '../../services/entities';
+import { parseListResponse } from '../../services/entities/crudService';
 import { extractApiErrorMessage } from '../../lib/api';
 
+function listItemsFromSettled(result) {
+  if (result?.status !== 'fulfilled') {
+    return [];
+  }
+  return parseListResponse(result.value).items;
+}
+
 const AdminOverviewPage = () => {
+  const { t } = useTranslation()
   const [dataCounts, setDataCounts] = useState({
     users: 0,
     departments: 0,
@@ -51,7 +61,10 @@ const AdminOverviewPage = () => {
         entityServices.factures.list()
       ]);
 
-      const getCount = (res) => (res.status === 'fulfilled' && Array.isArray(res.value)) ? res.value.length : 0;
+      const getCount = (res) => {
+        if (res.status !== 'fulfilled') return 0
+        return parseListResponse(res.value).count
+      };
       
       setDataCounts({
         users: getCount(usersRes),
@@ -63,8 +76,8 @@ const AdminOverviewPage = () => {
       });
 
       // Generate chart data based on loaded items
-      const mDemandes = demandesRes.status === 'fulfilled' ? demandesRes.value : [];
-      const mInterventions = interventionsRes.status === 'fulfilled' ? interventionsRes.value : [];
+      const mDemandes = listItemsFromSettled(demandesRes);
+      const mInterventions = listItemsFromSettled(interventionsRes);
 
       // Create a rolling 7-day window
       const today = new Date();
@@ -98,7 +111,7 @@ const AdminOverviewPage = () => {
       setChartData(last7Days);
 
     } catch (err) {
-      setError(extractApiErrorMessage(err, 'Failed to fetch global analytics.'));
+      setError(extractApiErrorMessage(err, t('error.loadFailed')));
     } finally {
       setLoading(false);
     }
@@ -109,48 +122,12 @@ const AdminOverviewPage = () => {
   }, []);
 
   const kpiData = [
-    {
-      title: 'Users & Roles',
-      count: dataCounts.users,
-      icon: Users,
-      description: 'Active accounts',
-      color: 'blue'
-    },
-    {
-      title: 'Departments',
-      count: dataCounts.departments,
-      icon: Building2,
-      description: 'Organized hubs',
-      color: 'indigo'
-    },
-    {
-      title: 'Active Maint. Requests',
-      count: dataCounts.demandes,
-      icon: ClipboardList,
-      description: 'System demands',
-      color: 'amber'
-    },
-    {
-      title: 'Total Interventions',
-      count: dataCounts.interventions,
-      icon: Wrench,
-      description: 'Tracked actions',
-      color: 'emerald'
-    },
-    {
-      title: 'Repair Sheets',
-      count: dataCounts.fiches,
-      icon: FileText,
-      description: 'Logged history',
-      color: 'violet'
-    },
-    {
-      title: 'Total Invoices',
-      count: dataCounts.factures,
-      icon: Receipt,
-      description: 'Pending & paid',
-      color: 'rose'
-    },
+    { title: t('User'), count: dataCounts.users, icon: Users, description: t('role.admin'), color: 'blue' },
+    { title: t('Modules'), count: dataCounts.departments, icon: Building2, description: t('dashboard.activeModules'), color: 'indigo' },
+    { title: t('dashboard.pendingDemandes'), count: dataCounts.demandes, icon: ClipboardList, description: t('status.en_cours'), color: 'amber' },
+    { title: t('nav.modules'), count: dataCounts.interventions, icon: Wrench, description: t('status.en_cours'), color: 'emerald' },
+    { title: t('crud.records'), count: dataCounts.fiches, icon: FileText, description: t('status.termine'), color: 'violet' },
+    { title: t('dashboard.totalRecords'), count: dataCounts.factures, icon: Receipt, description: t('status.payee'), color: 'rose' },
   ];
 
   // Map arbitrary colors to Tailwind classes safely

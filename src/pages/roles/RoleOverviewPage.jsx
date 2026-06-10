@@ -16,6 +16,9 @@ import {
 import { extractApiErrorMessage } from '../../lib/api'
 import { entityServices } from '../../services/entities'
 import { roleModulePath } from '../../lib/roleWorkspaces'
+import { DEMANDE_PIECE_DASHBOARD_GROUPS } from '../../lib/domainConstants'
+import { tModule } from '../../lib/i18nLabels'
+import i18n from '../../i18n'
 
 // Animated shapes for different roles to give a "pro" specific feel
 const RoleBackgrounds = {
@@ -86,11 +89,12 @@ function RoleOverviewPage() {
               throw new Error(`${serviceKey} service not configured`)
             }
 
-            return service.list()
+            const result = await service.list({ page: 1, page_size: 1 })
+            return result.count ?? result.items?.length ?? 0
           }),
         )
 
-        const count = rowsList.reduce((sum, rows) => sum + (Array.isArray(rows) ? rows.length : 0), 0)
+        const count = rowsList.reduce((sum, value) => sum + (Number(value) || 0), 0)
         return { key: module.key, count, error: '' }
       } catch (error) {
         return {
@@ -118,12 +122,12 @@ function RoleOverviewPage() {
       try {
         let interventions = []
         if (role === 'technicien' && typeof entityServices.interventions.listMine === 'function') {
-           interventions = await entityServices.interventions.listMine()
+           interventions = await entityServices.interventions.listAll()
         } else {
-           interventions = await entityServices.interventions.list()
+           interventions = await entityServices.interventions.listAll()
         }
         
-        const demands = await entityServices['demande-maintenances'].list()
+        const demands = await entityServices['demande-maintenances'].listAll()
         
         const stats = [
           { 
@@ -180,8 +184,8 @@ function RoleOverviewPage() {
     if (role === 'chefstock') {
       try {
         const [piecesData, demandePiecesData] = await Promise.all([
-          entityServices.pieces.list(),
-          entityServices['demande-pieces'].list(),
+          entityServices.pieces.listAll(),
+          entityServices['demande-pieces'].listAll(),
         ])
         setStockData({ pieces: piecesData, demandePieces: demandePiecesData, loaded: true })
       } catch (err) {
@@ -193,10 +197,10 @@ function RoleOverviewPage() {
     if (role === 'receptioniste') {
       try {
         const [clientsData, materielsData, demandesData, facturesData] = await Promise.all([
-          entityServices.clients.list(),
-          entityServices.materiels.list(),
-          entityServices['demande-maintenances'].list(),
-          entityServices.factures.list(),
+          entityServices.clients.listAll(),
+          entityServices.materiels.listAll(),
+          entityServices['demande-maintenances'].listAll(),
+          entityServices.factures.listAll(),
         ])
         setRecepData({ clients: clientsData, materiels: materielsData, demandes: demandesData, factures: facturesData, loaded: true })
       } catch (err) {
@@ -238,7 +242,9 @@ function RoleOverviewPage() {
     const unpaid           = factures.filter(f => !f.est_payee).length
 
     // Monthly demandes
-    const monthNames = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc']
+    const monthNames = Array.from({ length: 12 }, (_, i) =>
+      new Intl.DateTimeFormat(i18n.language, { month: 'short' }).format(new Date(2024, i, 1)),
+    )
     const monthlyCounts = new Array(12).fill(0)
     demandes.forEach(d => {
       const dt = new Date(d.date_creation)
@@ -259,10 +265,10 @@ function RoleOverviewPage() {
       .slice(0, 6)
 
     const kpiCards = [
-      { label: 'Clients',            value: totalClients,    icon: Users,          color: '#6366f1', bg: 'bg-indigo-50 dark:bg-indigo-900/20',  text: 'text-indigo-600 dark:text-indigo-400',  bar: 'bg-indigo-400', hint: 'Total enregistrés', key: 'clients' },
-      { label: 'Matériels',          value: totalMateriels,  icon: Monitor,        color: '#8b5cf6', bg: 'bg-violet-50 dark:bg-violet-900/20',  text: 'text-violet-600 dark:text-violet-400',  bar: 'bg-violet-400', hint: 'Équipements',       key: 'materiels' },
-      { label: 'Demandes en attente',value: pendingDemandes, icon: ClipboardList,  color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-900/20',   text: 'text-amber-600 dark:text-amber-400',   bar: 'bg-amber-400',  hint: 'À traiter',        key: 'demande-maintenances' },
-      { label: 'Factures impayées',  value: unpaid,          icon: Activity,       color: '#ef4444', bg: 'bg-rose-50 dark:bg-rose-900/20',     text: 'text-rose-600 dark:text-rose-400',     bar: 'bg-rose-400',   hint: 'En attente paiement', key: 'factures' },
+      { label: tModule('clients'), value: totalClients, icon: Users, color: '#6366f1', bg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-600 dark:text-indigo-400', bar: 'bg-indigo-400', hint: t('overview.kpi.totalRegistered'), key: 'clients' },
+      { label: tModule('materiels'), value: totalMateriels, icon: Monitor, color: '#8b5cf6', bg: 'bg-violet-50 dark:bg-violet-900/20', text: 'text-violet-600 dark:text-violet-400', bar: 'bg-violet-400', hint: t('overview.kpi.equipment'), key: 'materiels' },
+      { label: t('dashboard.pendingDemandes'), value: pendingDemandes, icon: ClipboardList, color: '#f59e0b', bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600 dark:text-amber-400', bar: 'bg-amber-400', hint: t('overview.kpi.toProcess'), key: 'demande-maintenances' },
+      { label: t('common.unpaidInvoices'), value: unpaid, icon: Activity, color: '#ef4444', bg: 'bg-rose-50 dark:bg-rose-900/20', text: 'text-rose-600 dark:text-rose-400', bar: 'bg-rose-400', hint: t('overview.kpi.awaitingPayment'), key: 'factures' },
     ]
 
     const statusLabel = { 'en_attente': 'En attente', 'approuvee': 'Approuvée', 'refuse': 'Refusée', 'en_cours': 'En cours', 'termine': 'Terminée' }
@@ -279,19 +285,19 @@ function RoleOverviewPage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-slate-100">{t('Dashboard Overview')}</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gérez les clients, matériels et demandes de maintenance.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('common.manageClients')}</p>
             </div>
           </div>
 
           {/* Quick links */}
           <div className="mt-4 flex flex-wrap gap-2">
-            {[{key:'clients',label:'Clients'},{key:'materiels',label:'Matériels'},{key:'demande-maintenances',label:'Demandes'},{key:'factures',label:'Paiements'}].map(m => (
+            {[{ key: 'clients' }, { key: 'materiels' }, { key: 'demande-maintenances' }, { key: 'factures' }].map(m => (
               <button
                 key={m.key}
                 onClick={() => navigate(roleModulePath(role, m.key))}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
               >
-                {m.label} <ArrowUpRight className="h-3 w-3" />
+                {tModule(m.key)} <ArrowUpRight className="h-3 w-3" />
               </button>
             ))}
           </div>
@@ -342,14 +348,14 @@ function RoleOverviewPage() {
           <Card className="lg:col-span-2 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
-                <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100">Demandes de Maintenance</CardTitle>
-                <CardDescription>Volume mensuel des demandes</CardDescription>
+                <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100">{tModule('demande-maintenances')}</CardTitle>
+                <CardDescription>{t('overview.monthlyVolume')}</CardDescription>
               </div>
-              <Badge className="border-indigo-200 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2">Cette année</Badge>
+              <Badge className="border-indigo-200 bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2">{t('common.thisYear')}</Badge>
             </CardHeader>
             <CardContent className="pt-0 px-2">
-              <div className="h-60">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-60 min-h-[240px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={monthlyDemandes} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barSize={18}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} dy={8} />
@@ -364,21 +370,21 @@ function RoleOverviewPage() {
           {/* Donut – matériels par état */}
           <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100">État des Matériels</CardTitle>
-              <CardDescription>Répartition par état</CardDescription>
+              <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100">{t('common.materialState')}</CardTitle>
+              <CardDescription>{t('common.byState')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-4 pt-2">
-              <div className="relative w-37.5 h-37.5">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="relative h-36 w-36 min-h-[144px] min-w-[144px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <PieChart>
-                    <Pie data={materielStats.length ? materielStats : [{name:'Aucun',value:1,color:'#e2e8f0'}]} cx="50%" cy="50%" innerRadius={46} outerRadius={65} paddingAngle={3} dataKey="value">
-                      {(materielStats.length ? materielStats : [{name:'Aucun',value:1,color:'#e2e8f0'}]).map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    <Pie data={materielStats.length ? materielStats : [{ name: t('overview.none'), value: 1, color: '#e2e8f0' }]} cx="50%" cy="50%" innerRadius={46} outerRadius={65} paddingAngle={3} dataKey="value">
+                      {(materielStats.length ? materielStats : [{ name: t('overview.none'), value: 1, color: '#e2e8f0' }]).map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-black text-slate-900 dark:text-slate-100">{totalMateriels}</span>
-                  <span className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">total</span>
+                  <span className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{t('overview.total')}</span>
                 </div>
               </div>
               <div className="flex flex-col gap-1.5 w-full">
@@ -405,15 +411,15 @@ function RoleOverviewPage() {
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-indigo-500" /> Activité Récente
+                  <Activity className="h-4 w-4 text-indigo-500" /> {t('overview.recentActivity')}
                 </CardTitle>
-                <CardDescription>Dernières demandes de maintenance</CardDescription>
+                <CardDescription>{t('common.recentRequests')}</CardDescription>
               </div>
               <button
                 onClick={() => navigate(roleModulePath(role, 'demande-maintenances'))}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 text-xs font-semibold border border-indigo-100 dark:border-indigo-800/30 hover:bg-indigo-100 transition-colors"
               >
-                Voir tout <ArrowUpRight className="h-3 w-3" />
+                {t('overview.viewAll')} <ArrowUpRight className="h-3 w-3" />
               </button>
             </CardHeader>
             <CardContent className="p-0">
@@ -422,14 +428,14 @@ function RoleOverviewPage() {
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-700">
                       <th className="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">ID</th>
-                      <th className="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Priorité</th>
-                      <th className="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Statut</th>
-                      <th className="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">Date</th>
+                      <th className="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">{t('columns.priorite')}</th>
+                      <th className="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">{t('columns.statut')}</th>
+                      <th className="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400">{t('columns.date_creation')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                     {recentDemandes.length === 0 ? (
-                      <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-400">Aucune demande</td></tr>
+                      <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-400">{t('overview.noRequests')}</td></tr>
                     ) : recentDemandes.map(d => (
                       <tr
                         key={d.id}
@@ -491,9 +497,9 @@ function RoleOverviewPage() {
     const lowStockPieces = pieces.filter(p => Number(p.quantite_stock) <= 5)
     const totalValue = pieces.reduce((s, p) => s + (Number(p.quantite_stock) || 0) * (Number(p.prix_unitaire) || 0), 0)
 
-    const demandesEnAttente = demandePieces.filter(d => d.statut === 'en_attente').length
-    const demandesApprouvees = demandePieces.filter(d => d.statut === 'approuvee' || d.statut === 'livree').length
-    const demandesRefusees = demandePieces.filter(d => d.statut === 'refuse').length
+    const demandesEnAttente = demandePieces.filter(d => DEMANDE_PIECE_DASHBOARD_GROUPS.pending.includes(d.statut)).length
+    const demandesApprouvees = demandePieces.filter(d => DEMANDE_PIECE_DASHBOARD_GROUPS.approved.includes(d.statut)).length
+    const demandesRefusees = demandePieces.filter(d => DEMANDE_PIECE_DASHBOARD_GROUPS.refused.includes(d.statut)).length
 
     const demandePieStats = [
       { name: 'En attente', value: demandesEnAttente, color: '#f59e0b' },
@@ -503,7 +509,9 @@ function RoleOverviewPage() {
     const totalDemandes = demandePieStats.reduce((s, d) => s + d.value, 0)
 
     // Monthly stock movement by date_creation of pieces
-    const monthNames = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc']
+    const monthNames = Array.from({ length: 12 }, (_, i) =>
+      new Intl.DateTimeFormat(i18n.language, { month: 'short' }).format(new Date(2024, i, 1)),
+    )
     const monthlyCounts = new Array(12).fill(0)
     pieces.forEach(p => {
       const d = new Date(p.date_creation || p.created_at)

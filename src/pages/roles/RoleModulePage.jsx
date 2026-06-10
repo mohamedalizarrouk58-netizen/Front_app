@@ -1,9 +1,16 @@
 import { Navigate, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil, Plus, Printer, RefreshCw, Search, Trash2, X, TrendingUp, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Mail, Pencil, Plus, Printer, RefreshCw, Trash2, X, TrendingUp } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
+import { AppModal } from '../../components/ui/AppModal'
+import { ConfirmModal } from '../../components/ui/ConfirmModal'
+import { DataFiltersBar } from '../../components/ui/DataFiltersBar'
+import { DataPagination } from '../../components/ui/DataPagination'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useViewMode, viewContainerClass } from '../../hooks/useViewMode'
+import { DEFAULT_PAGE_SIZE } from '../../services/entities/crudService'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import i18n from '../../i18n'
@@ -17,11 +24,16 @@ import {
 import { getStoredAuth } from '../../lib/auth'
 import { extractApiErrorMessage } from '../../lib/api'
 import { getAdminEntityConfig } from '../../lib/adminEntities'
-import { connectMessagesSocket } from '../../lib/messagesRealtime'
 import { roleDashboardPath } from '../../lib/roleWorkspaces'
 import { entityServices } from '../../services/entities'
+import demandePiecesService from '../../services/entities/demandePieces.service'
 import { coercePayloadValue, toInputValue } from '../admin/helpers'
 import { displayRoleValue } from './helpers'
+import { getDemandePieceStatusStyle, formatStatusLabel } from '../../lib/statusUtils'
+import { useOperationFeedback } from '../../context/OperationFeedbackContext'
+import { tModule, tColumn } from '../../lib/i18nLabels'
+import { stripWorkflowFields } from '../../lib/workflowFields'
+import MessengerApp from '../../components/messaging/MessengerApp'
 
 function buildEmptyForm(fields) {
   return fields.reduce((accumulator, field) => {
@@ -181,6 +193,7 @@ function groupRequestedPieceRows(requestRows, availablePieces) {
 
 function RoleModulePage() {
   const { t } = useTranslation()
+  const { runWithFeedback } = useOperationFeedback()
   const { moduleKey } = useParams()
   const { role, workspace } = useOutletContext()
   const navigate = useNavigate()
@@ -234,13 +247,18 @@ function RoleModulePage() {
   }, [moduleEntity, moduleConfig])
 
   const [rows, setRows] = useState([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [readyInterventions, setReadyInterventions] = useState(new Set())
   const [lookupData, setLookupData] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchText, setSearchText] = useState('')
+  const debouncedSearch = useDebouncedValue(searchText)
   const [filterStatut, setFilterStatut] = useState('tous')
   const [filterPriorite, setFilterPriorite] = useState('tous')
+  const [viewMode, setViewMode] = useViewMode(`role-module-${moduleKey ?? 'default'}`)
   const [drawerMode, setDrawerMode] = useState('')
   const [formData, setFormData] = useState({})
   const [editingId, setEditingId] = useState(null)
@@ -259,6 +277,17 @@ function RoleModulePage() {
   const [selectedPieceId, setSelectedPieceId] = useState('')
   const [selectedPieceQty, setSelectedPieceQty] = useState(1)
   const [requestingPiece, setRequestingPiece] = useState(false)
+  const [acceptIntent, setAcceptIntent] = useState(false)
+
+  const hasWritableFields = useMemo(
+    () => editableFields.some((field) => !field.readOnly),
+    [editableFields],
+  )
+
+  const editingRow = useMemo(
+    () => (editingId ? rows.find((row) => row.id === editingId) : null),
+    [editingId, rows],
+  )
 
   const printFacture = useCallback((row) => {
     const clientName = typeof row.client === 'object'
@@ -271,7 +300,23 @@ function RoleModulePage() {
       ? (row.intervention.id || row.intervention)
       : row.intervention
 
+    const fmt = (value) => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 3 })
+    const montantPieces = Number(row.montant_pieces) || 0
+    const montantMainOeuvre = Number(row.montant_main_oeuvre) || 0
+    const montantFraisSociete = Number(row.montant_frais_societe) || 0
+    const montantSupplementaire = Number(row.montant_supplementaire) || 0
     const montant = Number(row.montant_total) || 0
+    const hasBreakdown = montantPieces > 0 || montantMainOeuvre > 0 || montantFraisSociete > 0 || montantSupplementaire > 0
+
+    const detailRows = hasBreakdown
+      ? [
+          montantPieces > 0 && `<tr><td>Pièces / Matériel</td><td>Fournitures</td><td>${fmt(montantPieces)} TND</td></tr>`,
+          montantMainOeuvre > 0 && `<tr><td>Main d'oeuvre</td><td>Travail technique</td><td>${fmt(montantMainOeuvre)} TND</td></tr>`,
+          montantFraisSociete > 0 && `<tr><td>Frais de la société</td><td>Frais de service</td><td>${fmt(montantFraisSociete)} TND</td></tr>`,
+          montantSupplementaire > 0 && `<tr><td>Prix supplémentaire</td><td>Charges additionnelles</td><td>${fmt(montantSupplementaire)} TND</td></tr>`,
+        ].filter(Boolean).join('')
+      : `<tr><td>Service de maintenance</td><td>Intervention #${interventionRef || '-'}</td><td>${fmt(montant)} TND</td></tr>`
+
     const dateFacture = row.date_facture
       ? new Date(row.date_facture).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })
       : new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -361,19 +406,13 @@ function RoleModulePage() {
           <th>Montant</th>
         </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td>Service de maintenance</td>
-          <td>Intervention #${interventionRef || '-'}</td>
-          <td>${montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} TND</td>
-        </tr>
-      </tbody>
+      <tbody>${detailRows}</tbody>
     </table>
 
     <div class="total-section">
       <div class="total-box">
         <div class="label">Montant Total</div>
-        <div class="amount">${montant.toLocaleString('fr-FR', { minimumFractionDigits: 3 })} <span class="currency">TND</span></div>
+        <div class="amount">${fmt(montant)} <span class="currency">TND</span></div>
       </div>
     </div>
 
@@ -449,7 +488,7 @@ function RoleModulePage() {
       }
 
       try {
-        const items = await lookupService.list()
+        const items = await lookupService.listAll()
         return { serviceKey, items }
       } catch {
         return { serviceKey, items: [] }
@@ -475,27 +514,57 @@ function RoleModulePage() {
     setError('')
 
     try {
-      let list = []
-
-      if (moduleConfig?.useMineEndpoint && typeof service.listMine === 'function') {
-        try {
-          list = await service.listMine()
-        } catch {
-          list = await service.list()
-        }
-      } else {
-        list = await service.list()
+      if (isMessagesModule) {
+        setLoading(false)
+        return
       }
 
+      const params = { page, page_size: pageSize }
+      if (debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim()
+      }
+      if (moduleConfig?.key === 'demande-maintenances') {
+        if (filterStatut !== 'tous') params.statut = filterStatut
+        if (filterPriorite !== 'tous') params.priorite = filterPriorite
+      }
+      if (role === 'receptioniste' && moduleConfig?.key === 'factures' && filterStatut !== 'tous') {
+        params.statut = filterStatut
+      }
 
+      let result
+      if (moduleConfig?.useMineEndpoint && typeof service.listMine === 'function') {
+        try {
+          result = await service.listMine(params)
+        } catch {
+          result = await service.list(params)
+        }
+      } else {
+        result = await service.list(params)
+      }
 
-      setRows(list)
+      setRows(result.items)
+      setTotalCount(result.count)
     } catch (requestError) {
       setError(extractApiErrorMessage(requestError, t('Failed to load module data.')))
     } finally {
       setLoading(false)
     }
-  }, [moduleConfig, service, t])
+  }, [
+    debouncedSearch,
+    filterPriorite,
+    filterStatut,
+    isMessagesModule,
+    moduleConfig,
+    page,
+    pageSize,
+    role,
+    service,
+    t,
+  ])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, filterStatut, filterPriorite, moduleKey])
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -509,39 +578,19 @@ function RoleModulePage() {
   }, [loadLookups, loadRows])
 
   const filteredRows = useMemo(() => {
-      let result = rows
+    if (!isMessagesModule) {
+      return rows
+    }
 
-      if (role === 'manager' && moduleConfig?.key === 'demande-maintenances' && currentUserId) {
-        result = result.filter((row) => Number(row.manager) === currentUserId || Number(row.manager?.id) === currentUserId)
-      }
+    if (!searchText.trim()) {
+      return rows
+    }
 
-      if (moduleConfig?.key === 'demande-maintenances') {
-        if (filterStatut !== 'tous') {
-          result = result.filter(row => row.statut === filterStatut)
-        }
-        if (filterPriorite !== 'tous') {
-          result = result.filter(row => row.priorite === filterPriorite)
-        }
-      }
-
-      if (role === 'receptioniste' && moduleConfig?.key === 'factures') {
-        if (filterStatut === 'payee') {
-          result = result.filter(row => row.est_payee === true || row.est_payee === 'true')
-        } else if (filterStatut === 'non_payee') {
-          result = result.filter(row => row.est_payee === false || row.est_payee === 'false' || row.est_payee === undefined)
-        }
-      }
-
-      if (!searchText.trim()) {
-        return result
-      }
-
-      const keyword = searchText.toLowerCase()
-
-      return result.filter((row) => {
-        return Object.values(row).some((value) => displayRoleValue(value).toLowerCase().includes(keyword))
-      })
-    }, [rows, searchText, filterStatut, filterPriorite, role, moduleConfig, currentUserId])
+    const keyword = searchText.toLowerCase()
+    return rows.filter((row) =>
+      Object.values(row).some((value) => displayRoleValue(value).toLowerCase().includes(keyword)),
+    )
+  }, [rows, searchText, isMessagesModule])
 
   const groupedPieceRows = useMemo(() => {
     if (moduleConfig?.key !== 'pieces') {
@@ -666,61 +715,12 @@ function RoleModulePage() {
   }, [activeConversation?.messages, isMessagesModule])
 
   useEffect(() => {
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
     if (!isMessagesModule) {
       setWsState('idle')
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
-      }
-      return
-    }
-
-    if (!auth?.access) {
-      setWsState('error')
-      return
-    }
-
-    setWsState('connecting')
-
-    const socket = connectMessagesSocket(auth.access, {
-      onOpen: () => {
-        setWsState('connected')
-      },
-      onClose: () => {
-        setWsState((prev) => (prev === 'error' ? prev : 'closed'))
-      },
-      onError: () => {
-        setWsState('error')
-      },
-      onMessage: (eventPayload) => {
-        if (!eventPayload || eventPayload.type !== 'message.created') {
-          return
-        }
-
-        setRows((previousRows) => {
-          const existingIndex = previousRows.findIndex((item) => item.id === eventPayload.id)
-
-          if (existingIndex >= 0) {
-            const updated = [...previousRows]
-            updated[existingIndex] = {
-              ...updated[existingIndex],
-              ...eventPayload,
-            }
-            return updated
-          }
-
-          return [eventPayload, ...previousRows]
-        })
-      },
-    })
-
-    wsRef.current = socket
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
-      }
     }
   }, [auth?.access, isMessagesModule])
 
@@ -731,22 +731,7 @@ function RoleModulePage() {
 
     const baseForm = buildEmptyForm(editableFields)
 
-    if (
-      role === 'receptioniste' &&
-      moduleConfig?.key === 'demande-maintenances' &&
-      Object.prototype.hasOwnProperty.call(baseForm, 'statut')
-    ) {
-      baseForm.statut = 'en_attente'
-    }
-
-    if (
-      role === 'manager' &&
-      moduleConfig?.key === 'factures' &&
-      Object.prototype.hasOwnProperty.call(baseForm, 'est_payee')
-    ) {
-      baseForm.est_payee = false
-    }
-
+    setAcceptIntent(false)
     setDrawerMode('create')
     setEditingId(null)
     setSaveError('')
@@ -755,20 +740,33 @@ function RoleModulePage() {
 
   const loadFichePieces = async (ficheId) => {
     try {
-      const p = await entityServices['pieces'].list();
+      const p = await entityServices['pieces'].listAll();
       setAvailablePieces(p);
-      const r = await entityServices['demande-pieces'].list();
+      const r = await entityServices['demande-pieces'].listAll();
       setRequestedPieces(r.filter(req => Number(req.fiche) === ficheId || Number(req.fiche?.id) === ficheId));
     } catch (e) {
       console.error(e);
     }
   }
 
-  const openEdit = async (row) => {
-    if (!permissions.update || !editableFields.length) {
+  const openAcceptDemande = async (row) => {
+    if (!permissions.update) {
       return
     }
 
+    setAcceptIntent(true)
+    setDrawerMode('edit')
+    setEditingId(row.id)
+    setSaveError('')
+    setFormData(buildEditForm(editableFields, row))
+  }
+
+  const openEdit = async (row) => {
+    if (!permissions.update || !hasWritableFields) {
+      return
+    }
+
+    setAcceptIntent(false)
     setDrawerMode('edit')
     setEditingId(row.id)
     setSaveError('')
@@ -776,7 +774,7 @@ function RoleModulePage() {
     
     if (role === 'technicien' && moduleConfig?.key === 'interventions') {
       try {
-        const fiches = await entityServices['fiche-reparations'].list();
+        const fiches = await entityServices['fiche-reparations'].listAll();
         const relatedFiche = fiches.find(f => Number(f.intervention) === Number(row.id) || Number(f.intervention?.id) === Number(row.id));
         setCurrentFiche(relatedFiche || null);
         if (relatedFiche) {
@@ -791,6 +789,7 @@ function RoleModulePage() {
   }
 
   const closeDrawer = () => {
+    setAcceptIntent(false)
     setDrawerMode('')
     setEditingId(null)
     setSaveError('')
@@ -810,7 +809,6 @@ function RoleModulePage() {
         fiche: currentFiche.id,
         piece: Number(selectedPieceId),
         quantite: Number(selectedPieceQty),
-        statut: 'demandee'
       });
       await loadFichePieces(currentFiche.id);
       setSelectedPieceId('');
@@ -823,7 +821,7 @@ function RoleModulePage() {
   }
 
   const cancelPieceRequest = async (requestId) => {
-    if (!confirm('Voulez-vous vraiment annuler cette demande de pièce ?')) return;
+    if (!confirm(t('module.cancelPieceConfirm'))) return;
     try {
       await entityServices['demande-pieces'].remove(requestId);
       if (currentFiche) {
@@ -850,6 +848,10 @@ function RoleModulePage() {
     const payload = {}
 
     for (const field of editableFields) {
+      if (field.key === 'is_deleted') {
+        continue
+      }
+
       if (field.createOnly && drawerMode === 'edit') {
         continue
       }
@@ -871,30 +873,102 @@ function RoleModulePage() {
       payload[field.key] = coerced
     }
 
-      if (role === 'receptioniste' && moduleConfig?.key === 'demande-maintenances' && drawerMode === 'create') {
-        payload.statut = 'en_attente'
-      }
+    const cleaned = stripWorkflowFields(payload)
 
-      if (role === 'manager' && moduleConfig?.key === 'factures' && drawerMode === 'create') {
-        if (payload.est_payee === '' || payload.est_payee === undefined || payload.est_payee === null) {
-          payload.est_payee = false
-        }
-      }
-
-      return payload
+    if (
+      acceptIntent &&
+      moduleConfig?.key === 'demande-maintenances' &&
+      drawerMode === 'edit'
+    ) {
+      cleaned.statut = 'en_cours'
     }
+
+    return cleaned
+  }
+
+  const sendFactureToClient = async (row) => {
+    if (!row?.id) {
+      return
+    }
+
+    const confirmMessage = row.facture_email_envoye
+      ? t('module.resendInvoiceConfirm')
+      : t('module.sendInvoiceConfirm')
+
+    if (!confirm(confirmMessage)) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await runWithFeedback(
+        async () => {
+          await entityServices['demande-maintenances'].envoyerFactureClient(row.id)
+          await loadRows()
+        },
+        {
+          action: 'update',
+          entity: t('module.clientInvoice'),
+        },
+      )
+    } catch (requestError) {
+      setError(extractApiErrorMessage(requestError, t('module.sendInvoiceError')))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const markFacturePaid = async (row) => {
+    if (!service || !row?.id) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await runWithFeedback(
+        async () => {
+          await service.update(row.id, { est_payee: true })
+          await loadRows()
+        },
+        {
+          action: 'update',
+          entity: tModule(moduleConfig.key),
+        },
+      )
+    } catch (requestError) {
+      setError(extractApiErrorMessage(requestError, t('Unable to save changes.')))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const saveForm = async () => {
     if (!drawerMode || !service) {
       return
     }
 
+    const payload = buildPayload()
+    const moduleLabel = tModule(moduleConfig.key)
+
+    if (drawerMode !== 'create' && acceptIntent && moduleConfig?.key === 'demande-maintenances') {
+      const originalRow = rows.find((r) => r.id === editingId)
+      if (
+        originalRow?.statut === 'en_attente' &&
+        (!formData.technicien || !formData.description_panne)
+      ) {
+        setSaveError(t('Technicien and Description Panne are required to accept the request.'))
+        return
+      }
+    }
+
     setSaving(true)
     setSaveError('')
 
     try {
-      const payload = buildPayload()
-
       if (
         drawerMode === 'create' &&
         isMessagesModule &&
@@ -909,65 +983,82 @@ function RoleModulePage() {
             contenu: payload.contenu,
           }),
         )
-      } else if (drawerMode === 'create') {
-        await service.create(payload)
-      } else {
-        const originalRow = rows.find(r => r.id === editingId)
-        
-        if (
-           role === 'manager' && 
-           moduleConfig?.key === 'demande-maintenances' && 
-           originalRow?.statut === 'en_attente' && 
-           payload.statut === 'en_cours'
-        ) {
-           if (!formData.technicien || !formData.description_panne) {
-             setSaveError(t('Technicien and Description Panne are required to accept the request.'))
-             setSaving(false)
-             return
-           }
-           
-           await service.update(editingId, payload)
-           
-           try {
-             const createdIntervention = await entityServices['interventions'].create({
-               demande: editingId,
-               technicien: Number(formData.technicien),
-               diagnostic: 'À remplir par le technicien...',
-               solution_proposee: 'À remplir par le technicien...',
-               statut: 'en_attente',
-               date_debut: new Date().toISOString().split('T')[0]
-             })
-             
-             if (createdIntervention?.id) {
-               await entityServices['fiche-reparations'].create({
-                 intervention: createdIntervention.id,
-                 description_panne: formData.description_panne,
-                 solution: '',
-                 cout_main_oeuvre: 0,
-                 confirmation: false,
-                 valide_manager: false
-               })
-             }
-           } catch (e) {
-             console.error(t('Failed to spawn intervention and fiche'), e)
-           }
-        } else {
-           await service.update(editingId, payload)
-           
-           if (role === 'technicien' && moduleConfig?.key === 'interventions') {
-              setReadyInterventions(prev => {
-                const next = new Set(prev)
-                next.add(editingId)
-                return next
-              })
-           }
-        }
+        closeDrawer()
+        return
       }
 
-      if (!isMessagesModule || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        await loadRows()
-      }
+      let savedRecord = null
 
+      await runWithFeedback(
+        async () => {
+          if (drawerMode === 'create') {
+            savedRecord = await service.create(payload)
+          } else {
+            const originalRow = rows.find((r) => r.id === editingId)
+
+            if (
+              acceptIntent &&
+              moduleConfig?.key === 'demande-maintenances' &&
+              originalRow?.statut === 'en_attente'
+            ) {
+              await service.update(editingId, payload)
+
+              try {
+                const createdIntervention = await entityServices['interventions'].create({
+                  demande: editingId,
+                  technicien: Number(formData.technicien),
+                  diagnostic: 'À remplir par le technicien...',
+                  solution_proposee: 'À remplir par le technicien...',
+                  statut: 'en_attente',
+                  date_debut: new Date().toISOString().split('T')[0],
+                })
+
+                if (createdIntervention?.id) {
+                  await entityServices['fiche-reparations'].create({
+                    intervention: createdIntervention.id,
+                    description_panne: formData.description_panne,
+                    solution: '',
+                    cout_main_oeuvre: 0,
+                    confirmation: false,
+                    valide_manager: false,
+                  })
+                }
+              } catch (e) {
+                console.error(t('Failed to spawn intervention and fiche'), e)
+              }
+            } else {
+              await service.update(editingId, payload)
+
+              if (role === 'technicien' && moduleConfig?.key === 'interventions') {
+                setReadyInterventions((prev) => {
+                  const next = new Set(prev)
+                  next.add(editingId)
+                  return next
+                })
+              }
+            }
+          }
+
+          await loadRows()
+
+          if (savedRecord?.id) {
+            setRows((prev) => {
+              const without = prev.filter((row) => row.id !== savedRecord.id)
+              return drawerMode === 'create'
+                ? [savedRecord, ...without]
+                : without.map((row) => (row.id === savedRecord.id ? { ...row, ...savedRecord } : row))
+            })
+          }
+        },
+        {
+          action: drawerMode === 'create' ? 'create' : 'update',
+          entity: moduleLabel,
+        },
+      )
+
+      setSearchText('')
+      setFilterStatut('tous')
+      setFilterPriorite('tous')
       closeDrawer()
     } catch (requestError) {
       setSaveError(extractApiErrorMessage(requestError, t('Unable to save changes.')))
@@ -985,8 +1076,13 @@ function RoleModulePage() {
     setDeletingId(rowId)
 
     try {
-      await service.remove(rowId)
-      await loadRows()
+      await runWithFeedback(
+        async () => {
+          await service.remove(rowId)
+          await loadRows()
+        },
+        { action: 'delete', entity: tModule(moduleConfig.key) },
+      )
       setDeleteModalState({ isOpen: false, row: null })
     } catch (requestError) {
       setError(extractApiErrorMessage(requestError, t('Unable to delete record.')))
@@ -1070,10 +1166,10 @@ function RoleModulePage() {
             </Button>
             <div>
               <h1 className="font-display text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
-                {moduleConfig.label}
+                {tModule(moduleConfig.key)}
               </h1>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 sm:text-base">
-                {moduleConfig.description || `Operational view for ${moduleConfig.label.toLowerCase()}.`}
+                {moduleConfig.description || t('Operational view for {{module}}.', { module: tModule(moduleConfig.key) })}
               </p>
             </div>
           </div>
@@ -1096,72 +1192,88 @@ function RoleModulePage() {
             {permissions.create && !isMessagesModule ? (
               <Button onClick={openCreate}>
                 <Plus className="mr-2 h-4 w-4" />
-                New Record
+                {t('crud.newRecord')}
               </Button>
             ) : null}
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 mt-4 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-300" />
-            <input
-              className="h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 pl-9 pr-3 text-sm outline-none ring-[#145f7a]/40 transition focus:ring-2"
-              placeholder={isMessagesModule ? 'Search conversations and messages' : `Search ${moduleConfig.label}`}
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-            />
-          </div>
-
-          {moduleConfig?.key === 'demande-maintenances' && (
-            <div className="flex gap-2 w-full sm:w-auto">
-              <select
-                className="h-9 w-full sm:w-36 rounded-md border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-3 text-sm outline-none ring-[#145f7a]/40 transition focus:ring-2"
-                value={filterStatut}
-                onChange={e => setFilterStatut(e.target.value)}
-              >
-                <option value="tous">Tous les status</option>
-                <option value="en_attente">En Attente</option>
-                <option value="en_cours">En Cours</option>
-                <option value="termine">Terminé</option>
-                <option value="refuse">Non Résolu</option>
-              </select>
-
-              <select
-                className="h-9 w-full sm:w-36 rounded-md border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-3 text-sm outline-none ring-[#145f7a]/40 transition focus:ring-2"
-                value={filterPriorite}
-                onChange={e => setFilterPriorite(e.target.value)}
-              >
-                <option value="tous">Toutes les priorités</option>
-                <option value="haute">Haute</option>
-                <option value="moyenne">Moyenne</option>
-                <option value="faible">Faible</option>
-              </select>
-            </div>
-          )}
-
-          {moduleConfig?.key === 'factures' && (
-            <div className="flex gap-2 w-full sm:w-auto">
-              <select
-                className="h-9 w-full sm:w-40 rounded-md border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-3 text-sm outline-none ring-[#145f7a]/40 transition focus:ring-2"
-                value={filterStatut}
-                onChange={e => setFilterStatut(e.target.value)}
-              >
-                <option value="tous">Toutes les factures</option>
-                <option value="payee">Factures Payées</option>
-                <option value="non_payee">Factures Non Payées</option>
-              </select>
-            </div>
-          )}
-        </div>
       </header>
+
+      {!isMessagesModule ? (
+        <DataFiltersBar
+          className="animate-rise"
+          searchValue={searchText}
+          onSearchChange={setSearchText}
+          searchPlaceholder={t('crud.search', { entity: tModule(moduleConfig.key) })}
+          shown={filteredRows.length}
+          total={totalCount}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          hasActiveFilters={
+            searchText.trim().length > 0 ||
+            (moduleConfig?.key === 'demande-maintenances' && (filterStatut !== 'tous' || filterPriorite !== 'tous')) ||
+            (moduleConfig?.key === 'factures' && filterStatut !== 'tous')
+          }
+          onClearFilters={() => {
+            setSearchText('')
+            setFilterStatut('tous')
+            setFilterPriorite('tous')
+          }}
+          filters={
+            moduleConfig?.key === 'demande-maintenances'
+              ? [
+                  {
+                    id: 'statut',
+                    label: t('columns.statut'),
+                    value: filterStatut,
+                    onChange: setFilterStatut,
+                    options: [
+                      { value: 'tous', label: t('module.allStatuses') },
+                      { value: 'en_attente', label: t('status.en_attente') },
+                      { value: 'en_cours', label: t('status.en_cours') },
+                      { value: 'termine', label: t('status.termine') },
+                      { value: 'refuse', label: t('module.notResolved') },
+                    ],
+                  },
+                  {
+                    id: 'priorite',
+                    label: t('columns.priorite'),
+                    value: filterPriorite,
+                    onChange: setFilterPriorite,
+                    options: [
+                      { value: 'tous', label: t('common.allPriorities') },
+                      { value: 'haute', label: t('priorite.haute') },
+                      { value: 'moyenne', label: t('priorite.moyenne') },
+                      { value: 'faible', label: t('priorite.faible') },
+                    ],
+                  },
+                ]
+              : moduleConfig?.key === 'factures'
+                ? [
+                    {
+                      id: 'statut',
+                      label: t('columns.statut'),
+                      value: filterStatut,
+                      onChange: setFilterStatut,
+                      options: [
+                        { value: 'tous', label: t('module.allInvoices') },
+                        { value: 'payee', label: t('common.paidInvoices') },
+                        { value: 'non_payee', label: t('common.unpaidInvoices') },
+                      ],
+                    },
+                  ]
+                : []
+          }
+        />
+      ) : null}
 
 
 
       {(role === 'technicien' || role === 'manager' || role === 'administrateur' || role === 'admin') && moduleConfig?.key === 'interventions' ? (
-        <div className="flex flex-col gap-3 animate-rise delay-1">
+        <div className={`animate-rise delay-1 ${viewContainerClass(viewMode, 'flex flex-col gap-3')}`}>
           {filteredRows.map(row => (
-             <div key={row.id} className={`flex items-center justify-between border transition-all rounded-lg p-3 lg:p-4 ${
+             <div key={row.id} className={`${viewMode === 'cards' ? 'flex flex-col gap-3' : 'flex items-center justify-between'} border transition-all rounded-lg p-3 lg:p-4 ${
                 row.statut === 'refuse'
                   ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/30 shadow-sm shadow-rose-100'
                   : row.statut === 'termine'
@@ -1187,17 +1299,17 @@ function RoleModulePage() {
                   </div>
                   
                   <div className="flex flex-col min-w-[150px] lg:min-w-[200px] flex-1">
-                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Demande liée</span>
+                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('common.linkedRequest')}</span>
                     <span className="font-medium text-slate-700 dark:text-slate-300 text-sm truncate">REQ-{displayRoleValue(row.demande)}</span>
                   </div>
                   
                   <div className="flex flex-col flex-1 hidden md:flex min-w-[200px]">
-                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Diagnostic</span>
-                    <span className="text-sm truncate text-slate-700 dark:text-slate-300">{row.diagnostic || <span className="text-slate-400 dark:text-slate-300 italic">Non spécifié</span>}</span>
+                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('columns.diagnostic')}</span>
+                    <span className="text-sm truncate text-slate-700 dark:text-slate-300">{row.diagnostic || <span className="text-slate-400 dark:text-slate-300 italic">{t('common.notSpecified')}</span>}</span>
                   </div>
                   
                   <div className="flex flex-col w-24 hidden lg:flex">
-                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Date Début</span>
+                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('common.startDate')}</span>
                     <span className="text-sm text-slate-700 dark:text-slate-300">{row.date_debut ? new Date(row.date_debut).toLocaleDateString() : '-'}</span>
                   </div>
                 </div>
@@ -1214,33 +1326,33 @@ function RoleModulePage() {
                               await service.update(row.id, { statut: 'en_cours' });
                               await loadRows();
                            } catch {
-                              setError('Impossible d\'accepter l\'intervention');
+                              setError(t('module.acceptInterventionError'));
                            } finally {
                               setLoading(false);
                            }
                         }}
                       >
-                        Accepter
+                        {t('module.accept')}
                       </Button>
                       <Button
                         size="sm"
                         variant="destructive"
                         className="h-7 text-xs px-2"
                         onClick={async () => {
-                             if (confirm('Voulez-vous vraiment marquer cette intervention comme non résolue ?')) {
+                             if (confirm(t('module.markInterventionNotResolved'))) {
                                setLoading(true);
                                try {
                                  await service.update(row.id, { statut: 'refuse' });
                                  await loadRows();
                                } catch {
-                                 setError('Impossible de marquer comme non résolu');
+                                 setError(t('module.markNotResolvedError'));
                                } finally {
                                  setLoading(false);
                                }
                              }
                            }}
                       >
-                        Non résolu
+                        {t('module.notResolved')}
                       </Button>
                     </>
                   )}
@@ -1267,124 +1379,98 @@ function RoleModulePage() {
                       }}
                       disabled={row.statut === 'termine' || !readyInterventions.has(row.id)}
                     >
-                      {row.statut === 'termine' ? 'Terminé' : 'Désactiver'}
+                      {row.statut === 'termine' ? t('module.completed') : t('module.disable')}
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
-                    {row.statut === 'en_cours' ? 'Traiter' : 'Détails'}
+                    {row.statut === 'en_cours' ? t('module.process') : t('crud.details')}
                   </Button>
                 </div>
              </div>
           ))}
           {filteredRows.length === 0 && (
              <div className="py-12 flex flex-col items-center justify-center text-slate-400 dark:text-slate-300 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                <p>Aucune intervention trouvée.</p>
+                <p>{t('module.noInterventions')}</p>
              </div>
           )}
         </div>
       ) : role === 'chefstock' && moduleConfig?.key === 'demande-pieces' ? (
-        <div className="flex flex-col gap-3 animate-rise delay-1">
+        <div className={`animate-rise delay-1 ${viewContainerClass(viewMode, 'flex flex-col gap-3')}`}>
           {filteredRows.map(row => {
              const pieceName = getResolvedColumnValue('piece', row.piece);
              const ficheId = getResolvedColumnValue('fiche', row.fiche);
              
              return (
-               <div key={row.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/30 hover:shadow-sm transition-all rounded-lg p-3 lg:p-4">
+               <div key={row.id} className={`${viewMode === 'cards' ? 'flex flex-col gap-3' : 'flex flex-col sm:flex-row sm:items-center justify-between gap-4'} border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-900 hover:border-[#145f7a]/30 hover:shadow-sm transition-all rounded-lg p-3 lg:p-4`}>
                   <div className="flex items-center gap-4 flex-1 flex-wrap sm:flex-nowrap sm:grid sm:grid-cols-[80px_96px_1fr_80px] md:grid-cols-[80px_96px_1fr_80px_96px] lg:grid-cols-[80px_96px_1fr_80px_96px_96px]">
                     <div className="flex-shrink-0 w-20">
                       <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">REQ-P-{row.id}</span>
                     </div>
                     
                     <div className="flex-shrink-0 w-28">
-                      <Badge variant="outline" className={`text-xs px-2 py-0.5 rounded-full
-                        ${row.statut === 'demandee' ? 'bg-amber-50 text-amber-700 border-amber-200' : ''}
-                        ${row.statut === 'approuvee' ? 'bg-sky-50 text-sky-700 border-sky-200' : ''}
-                        ${row.statut === 'livree' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : ''}
-                      `}>
-                        {row.statut?.toUpperCase()}
+                      <Badge variant="outline" className={`text-xs px-2 py-0.5 rounded-full border ${getDemandePieceStatusStyle(row.statut)}`}>
+                        {formatStatusLabel(row.statut, t)}
                       </Badge>
                     </div>
                     
                     <div className="flex flex-col min-w-[120px] flex-1">
-                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Pièce</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('columns.piece')}</span>
                       <span className="font-medium text-[#145f7a] text-sm truncate">{pieceName}</span>
                     </div>
                     
                     <div className="flex flex-col min-w-[80px]">
-                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Quantité</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('common.quantity')}</span>
                       <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">{row.quantite}</span>
                     </div>
                     
                     <div className="flex flex-col min-w-[100px] hidden sm:flex">
-                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Fiche Liée</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('module.linkedFicheLabel')}</span>
                       <span className="text-sm truncate text-slate-700 dark:text-slate-300">FCH-{ficheId}</span>
                     </div>
                     
                     <div className="flex flex-col w-24 hidden lg:flex">
-                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Date</span>
+                      <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('columns.date_demande')}</span>
                       <span className="text-sm text-slate-700 dark:text-slate-300">{new Date(row.date_demande || Date.now()).toLocaleDateString()}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 sm:justify-end sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 flex-shrink-0 self-end sm:self-auto w-full sm:w-[180px]">
-                    {row.statut === 'demandee' && (
-                       <Button 
-                         size="sm" 
-                         className="bg-sky-600 hover:bg-sky-700 text-white h-8 text-xs flex-1 sm:flex-none"
-                         onClick={async () => {
-                            setLoading(true);
-                            try {
-                               await service.update(row.id, { statut: 'approuvee' });
-                               await loadRows();
-                            } catch {
-                               setError('Impossible d\'approuver la demande');
-                            } finally {
-                               setLoading(false);
-                            }
-                         }}
+                    {row.statut === 'hors_stock' && (
+                       <Button
+                         size="sm"
+                         variant="outline"
+                         className="h-8 text-xs flex-1 sm:flex-none border-rose-200 text-rose-700"
+                         onClick={() => navigate('/chefstock/suivi-achat')}
                        >
-                         Approuver
+                         {t('module.purchaseTracking')}
                        </Button>
                     )}
-                    
-                    {row.statut === 'approuvee' && (
+
+                    {row.statut === 'demandee' && (
                        <Button 
                          size="sm" 
                          className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs flex-1 sm:flex-none"
                          onClick={async () => {
-                            if (confirm(`Confirmer la livraison de ${row.quantite}x ${pieceName} ? Le stock sera déduit.`)) {
+                            if (confirm(t('module.deliverConfirm', { qty: row.quantite, name: pieceName }))) {
                                setLoading(true);
                                try {
-                                  const targetPieceId = typeof row.piece === 'object' ? row.piece.id : row.piece;
-                                  const pieceData = await entityServices['pieces'].retrieve(targetPieceId);
-                                  
-                                  if (Number(pieceData.quantite_stock) < Number(row.quantite)) {
-                                     alert(`Stock insuffisant ! Le stock actuel est de ${pieceData.quantite_stock}.`);
-                                     setLoading(false);
-                                     return;
-                                  }
-                                  
-                                  await entityServices['pieces'].update(targetPieceId, {
-                                     quantite_stock: Number(pieceData.quantite_stock) - Number(row.quantite)
-                                  });
-                                  
-                                  await service.update(row.id, { statut: 'livree' });
+                                  await demandePiecesService.livrerStock(row.id);
                                   await loadRows();
                                   await loadLookups();
-                               } catch {
-                                  setError('Erreur lors de la livraison.');
+                               } catch (err) {
+                                  setError(extractApiErrorMessage(err, t('module.deliveryError')));
                                } finally {
                                   setLoading(false);
                                }
                             }
                          }}
                        >
-                         Livrer (- Stock)
+                         {t('module.deliverStock')}
                        </Button>
                     )}
 
                     <Button size="sm" variant="ghost" className="h-8 text-xs px-2 text-[#145f7a] hover:bg-sky-50 flex-1 sm:flex-none" onClick={() => openEdit(row)}>
-                      Détails
+                      {t('crud.details')}
                     </Button>
                   </div>
                </div>
@@ -1392,14 +1478,14 @@ function RoleModulePage() {
           })}
           {filteredRows.length === 0 && (
              <div className="py-12 flex flex-col items-center justify-center text-slate-400 dark:text-slate-300 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                <p>Aucune demande de pièce trouvée.</p>
+                <p>{t('module.noPartRequests')}</p>
              </div>
           )}
         </div>
       ) : moduleConfig?.key === 'demande-maintenances' ? (
-        <div className="flex flex-col gap-3 animate-rise delay-1">
+        <div className={`animate-rise delay-1 ${viewContainerClass(viewMode, 'flex flex-col gap-3')}`}>
           {filteredRows.map(row => (
-             <div key={row.id} className={`flex items-center justify-between border transition-all rounded-lg p-3 lg:p-4 ${
+             <div key={row.id} className={`${viewMode === 'cards' ? 'flex flex-col gap-3' : 'flex items-center justify-between'} border transition-all rounded-lg p-3 lg:p-4 ${
                 row.statut === 'refuse'
                   ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/30 shadow-sm shadow-rose-100'
                   : row.statut === 'termine'
@@ -1425,13 +1511,13 @@ function RoleModulePage() {
                   </div>
                   
                   <div className="flex flex-col min-w-[150px] lg:min-w-[200px] flex-1">
-                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Matériel</span>
+                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('common.material')}</span>
                     <span className="font-medium text-slate-700 dark:text-slate-300 text-sm truncate">{displayRoleValue(row.materiel)}</span>
                   </div>
                   
                   <div className="flex flex-col w-32 hidden md:flex">
-                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">Manager</span>
-                    <span className="text-sm truncate text-slate-700 dark:text-slate-300">{displayRoleValue(row.manager) || <span className="text-slate-400 dark:text-slate-300 italic">Non assigné</span>}</span>
+                    <span className="text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-semibold">{t('columns.manager')}</span>
+                    <span className="text-sm truncate text-slate-700 dark:text-slate-300">{displayRoleValue(row.manager) || <span className="text-slate-400 dark:text-slate-300 italic">{t('common.notAssigned')}</span>}</span>
                   </div>
                   
                   <div className="flex flex-col w-24 hidden lg:flex">
@@ -1453,28 +1539,43 @@ function RoleModulePage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 sm:justify-end pl-4 ml-4 border-l border-slate-100 flex-shrink-0 sm:w-[220px]">
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end pl-4 ml-4 border-l border-slate-100 flex-shrink-0 sm:max-w-[280px]">
+                  {role === 'receptioniste' && row.statut === 'termine' && (
+                    <Button
+                      size="sm"
+                      className={`h-7 text-xs px-2 gap-1 ${
+                        row.facture_email_envoye
+                          ? 'bg-sky-600 hover:bg-sky-700 text-white'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
+                      onClick={() => sendFactureToClient(row)}
+                      disabled={loading}
+                    >
+                      <Mail className="h-3.5 w-3.5" />
+                      {row.facture_email_envoye ? t('module.resendInvoice') : t('module.sendInvoiceClient')}
+                    </Button>
+                  )}
                   {(role === 'manager' || role === 'administrateur' || role === 'admin') && row.statut === 'en_attente' && (
                     <>
                       <Button
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs px-2"
-                        onClick={() => openEdit({ ...row, statut: 'en_cours' })}
+                        onClick={() => openAcceptDemande(row)}
                       >
-                        Accepter
+                        {t('module.accept')}
                       </Button>
                       <Button
                         size="sm"
                         variant="destructive"
                         className="h-7 text-xs px-2"
                         onClick={async () => {
-                             if (confirm('Voulez-vous vraiment marquer cette demande comme non résolue ?')) {
+                             if (confirm(t('module.markRequestNotResolved'))) {
                                setLoading(true);
                                try {
                                  await service.update(row.id, { statut: 'refuse' });
                                  await loadRows();
                                } catch {
-                                 setError('Impossible de marquer comme non résolu');
+                                 setError(t('module.markNotResolvedError'));
                                } finally {
                                  setLoading(false);
                                }
@@ -1515,182 +1616,15 @@ function RoleModulePage() {
           ))}
           {filteredRows.length === 0 && (
              <div className="py-12 flex flex-col items-center justify-center text-slate-400 dark:text-slate-300 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                <p>Aucune demande trouvée avec ces filtres.</p>
+                <p>{t('module.noRequestsFilter')}</p>
              </div>
           )}
         </div>
       ) : isMessagesModule ? (
-        <Card className="animate-rise delay-1 overflow-hidden">
-          <CardContent className="p-0">
-            {error ? (
-              <p className="m-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="grid h-[calc(100vh-140px)] min-h-[500px] grid-cols-1 md:grid-cols-[310px_minmax(0,1fr)]">
-              <aside className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 md:border-b-0 md:border-r flex flex-col h-full overflow-hidden">
-                <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between shrink-0">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Conversations</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{conversations.length} active threads</p>
-                  </div>
-                  {permissions.create && (
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="h-8 w-8 rounded-full p-0 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-[#145f7a]" 
-                      title="Nouveau Message"
-                      onClick={() => setActiveConversationKey('new')}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-
-                <div className="flex-1 overflow-y-auto">
-                  {activeConversationKey === 'new' && (
-                     <div className="w-full border-b border-sky-200 px-4 py-3 text-left transition bg-sky-50/50 shadow-sm border-l-4 border-l-sky-500">
-                        <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">Nouveau Message</p>
-                        <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">Sélectionnez un destinataire</p>
-                     </div>
-                  )}
-                  {conversations.map((conversation) => {
-                    const party = conversation.party
-                    const isActive = conversation.key === activeConversationKey
-                    const preview = String(conversation.lastMessage?.contenu ?? '').trim()
-
-                    return (
-                      <button
-                        key={conversation.key}
-                        type="button"
-                        className={`w-full border-b border-slate-200 dark:border-slate-700 px-4 py-3 text-left transition ${
-                          isActive ? 'bg-slate-50 dark:bg-slate-900 shadow-sm border-l-4 border-l-[#145f7a]' : 'bg-slate-50 dark:bg-slate-800/60 hover:bg-white/80 dark:bg-slate-900/80 border-l-4 border-l-transparent'
-                        }`}
-                        onClick={() => setActiveConversationKey(conversation.key)}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">
-                            {party.displayName || party.name || 'Unknown user'}
-                          </p>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {formatMessageTime(conversation.lastMessage?.date_envoi)}
-                          </span>
-                        </div>
-                        <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-                          {preview || 'No content'}
-                        </p>
-                      </button>
-                    )
-                  })}
-
-                  {!loading && conversations.length === 0 && activeConversationKey !== 'new' ? (
-                    <p className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">No conversations found.</p>
-                  ) : null}
-                </div>
-              </aside>
-
-              <section className="flex h-full flex-col overflow-hidden bg-gradient-to-b from-white to-[#eef4f7]">
-                <div className="border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-4 py-3 backdrop-blur shrink-0">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    {activeConversation?.party?.displayName || 'New message'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {activeConversation?.party?.role || 'Select a conversation or choose a recipient'}
-                  </p>
-                </div>
-
-                <div ref={messagesListRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-                  {activeConversation?.messages?.map((message) => {
-                    const mine = isMessageFromCurrentUser(message, currentUserId, currentUsername)
-
-                    return (
-                      <div
-                        key={message.id ?? `${message.expediteur}-${message.destinataire}-${message.date_envoi}`}
-                        className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm md:max-w-[70%] ${
-                            mine
-                              ? 'rounded-br-md bg-[#145f7a] text-white'
-                              : 'rounded-bl-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          {message.objet ? (
-                            <p className={`text-xs ${mine ? 'text-cyan-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                              {message.objet}
-                            </p>
-                          ) : null}
-                          <p className="mt-0.5 whitespace-pre-wrap">{message.contenu || 'No content'}</p>
-                          <p className={`mt-1 text-[11px] ${mine ? 'text-cyan-100/80' : 'text-slate-400 dark:text-slate-300'}`}>
-                            {formatMessageTime(message.date_envoi)}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  {!loading && !activeConversation ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Pick a conversation to display messages.</p>
-                  ) : null}
-
-                  {!loading && activeConversation && activeConversation.messages.length === 0 ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">No messages in this conversation yet.</p>
-                  ) : null}
-                </div>
-
-                {permissions.create ? (
-                  <div className="space-y-2 border-t border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-4 py-3 shrink-0">
-                    {!activeConversation?.party?.id ? (
-                      <select
-                        className="h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none ring-[#145f7a]/40 focus:ring-2"
-                        value={manualRecipientId}
-                        onChange={(event) => setManualRecipientId(event.target.value)}
-                      >
-                        <option value="">Select recipient...</option>
-                        {availableRecipients.map((recipient) => (
-                          <option key={`recipient-${recipient.id}`} value={recipient.id}>
-                            {displayRoleValue(recipient.username)} ({displayRoleValue(recipient.role)})
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
-
-                    <div className="flex items-end gap-2">
-                      <textarea
-                        className="min-h-20 flex-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none ring-[#145f7a]/40 focus:ring-2"
-                        placeholder="Type your message..."
-                        value={composerContent}
-                        onChange={(event) => setComposerContent(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault()
-                            if (!saving) sendComposerMessage()
-                          }
-                        }}
-                      />
-                      <Button onClick={sendComposerMessage} disabled={saving}>
-                        {saving ? 'Sending...' : 'Send'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </section>
-            </div>
-          </CardContent>
-        </Card>
+        <MessengerApp embedded onWsStateChange={setWsState} />
       ) : (
         <Card className="animate-rise delay-1 border-0 shadow-none bg-transparent">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">{moduleConfig.label} Records</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {filteredRows.length} / {rows.length} shown
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
+          <div className={viewContainerClass(viewMode)}>
             {error ? (
               <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                 {error}
@@ -1725,11 +1659,11 @@ function RoleModulePage() {
                                 <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">#{getResolvedColumnValue(column, row[column])}</span>
                               ) : column === 'est_payee' ? (
                                  <Badge variant="outline" className={`h-5 w-fit px-2 py-0 text-[10px] ${row[column] === true || row[column] === 'true' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
-                                   {row[column] === true || row[column] === 'true' ? 'PAYÉE' : 'NON PAYÉE'}
+                                   {row[column] === true || row[column] === 'true' ? t('common.paid') : t('common.unpaid')}
                                  </Badge>
                               ) : typeof row[column] === 'boolean' || row[column] === 'true' || row[column] === 'false' || column.startsWith('est_') ? (
                                 <Badge variant="outline" className={`h-5 w-fit px-2 py-0 text-[10px] ${row[column] === true || row[column] === 'true' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
-                                  {row[column] === true || row[column] === 'true' ? 'OUI' : 'NON'}
+                                  {row[column] === true || row[column] === 'true' ? t('crud.yes') : t('crud.no')}
                                 </Badge>
                               ) : (
                                 <span className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">{getResolvedColumnValue(column, row[column]) || '-'}</span>
@@ -1740,9 +1674,9 @@ function RoleModulePage() {
 
                         {(permissions.update || permissions.delete) && (
                           <div className="mt-3 flex shrink-0 items-center justify-end gap-2 sm:mt-0 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 self-end sm:self-auto sm:w-[200px]">
-                            {permissions.update ? (
+                            {permissions.update && hasWritableFields ? (
                               <Button size="sm" variant="ghost" className="h-8 px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
-                                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
+                                <Pencil className="h-3.5 w-3.5 mr-1.5" /> {t('crud.edit')}
                               </Button>
                             ) : null}
 
@@ -1754,7 +1688,7 @@ function RoleModulePage() {
                                 onClick={() => setDeleteModalState({ isOpen: true, row })}
                                 disabled={deletingId === row.id}
                               >
-                                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Supprimer
+                                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('crud.delete')}
                               </Button>
                             ) : null}
                           </div>
@@ -1776,11 +1710,11 @@ function RoleModulePage() {
                              <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">#{getResolvedColumnValue(column, row[column])}</span>
                           ) : column === 'est_payee' ? (
                              <Badge variant="outline" className={`w-fit text-[10px] px-2 py-0 h-5 ${row[column] === true || row[column] === 'true' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                               {row[column] === true || row[column] === 'true' ? 'PAYÉE' : 'NON PAYÉE'}
+                               {row[column] === true || row[column] === 'true' ? t('common.paid') : t('common.unpaid')}
                              </Badge>
                           ) : typeof row[column] === 'boolean' || row[column] === 'true' || row[column] === 'false' || column.startsWith('est_') ? (
                              <Badge variant="outline" className={`w-fit text-[10px] px-2 py-0 h-5 ${row[column] === true || row[column] === 'true' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
-                               {row[column] === true || row[column] === 'true' ? 'OUI' : 'NON'}
+                               {row[column] === true || row[column] === 'true' ? t('crud.yes') : t('crud.no')}
                              </Badge>
                           ) : (
                              <span className="font-medium text-slate-700 dark:text-slate-300 text-sm truncate">{getResolvedColumnValue(column, row[column]) || '-'}</span>
@@ -1792,17 +1726,29 @@ function RoleModulePage() {
                     {(permissions.update || permissions.delete || (role === 'receptioniste' && moduleConfig?.key === 'factures')) && (
                       <div className="flex items-center justify-end gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto mt-2 sm:mt-0 sm:w-[200px]">
                         {role === 'receptioniste' && moduleConfig?.key === 'factures' ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 px-2.5 text-[#145f7a] hover:bg-[#145f7a]/10 gap-1.5 font-medium"
-                            onClick={() => printFacture(row)}
-                          >
-                            <Printer className="h-3.5 w-3.5" /> Imprimer
-                          </Button>
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2.5 text-[#145f7a] hover:bg-[#145f7a]/10 gap-1.5 font-medium"
+                              onClick={() => printFacture(row)}
+                            >
+                              <Printer className="h-3.5 w-3.5" /> {t('module.print')}
+                            </Button>
+                            {row.est_payee !== true && row.est_payee !== 'true' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2.5 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 gap-1.5 font-medium"
+                                onClick={() => markFacturePaid(row)}
+                              >
+                                {t('module.markPaid')}
+                              </Button>
+                            ) : null}
+                          </>
                         ) : null}
 
-                        {permissions.update ? (
+                        {permissions.update && hasWritableFields ? (
                           <Button size="sm" variant="ghost" className="h-8 text-[#145f7a] hover:bg-sky-50 px-2" onClick={() => openEdit(row)}>
                             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
                           </Button>
@@ -1827,30 +1773,44 @@ function RoleModulePage() {
 
             {!loading && filteredRows.length === 0 ? (
               <div className="py-12 flex flex-col items-center justify-center text-slate-400 dark:text-slate-300 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-                 <p className="text-sm">Aucun enregistrement trouvé.</p>
+                 <p className="text-sm">{t('common.noRecords')}</p>
               </div>
             ) : null}
           </div>
         </Card>
       )}
 
-      {drawerMode && !isMessagesModule ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm sm:p-6">
-          <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/40 bg-[#f4f7f9] shadow-2xl flex flex-col max-h-full">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/40 bg-white/70 dark:bg-slate-900/70 px-5 py-4 backdrop-blur-md">
-              <div>
-                <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100">
-                  {drawerMode === 'create' ? 'Créer' : 'Modifier'} {moduleConfig.label}
-                </h2>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Mise à jour professionnelle du registre.</p>
-              </div>
+      {!isMessagesModule ? (
+        <DataPagination
+          page={page}
+          pageSize={pageSize}
+          total={totalCount}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
+          disabled={loading}
+        />
+      ) : null}
 
-              <Button variant="ghost" size="icon" onClick={closeDrawer} className="h-8 w-8 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-900 hover:text-rose-600">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+      <AppModal
+        open={Boolean(drawerMode) && !isMessagesModule}
+        onClose={closeDrawer}
+        eyebrow={drawerMode === 'create' ? t('crud.create') : t('crud.edit')}
+        title={tModule(moduleConfig?.key)}
+        size="xl"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button size="sm" variant="outline" onClick={closeDrawer}>{t('crud.cancel')}</Button>
+            <Button size="sm" className="bg-sky-600 hover:bg-sky-700" onClick={saveForm} disabled={saving}>
+              {saving ? t('crud.saving') : t('crud.save')}
+            </Button>
+          </div>
+        }
+      >
+            <p className="mb-4 text-xs font-medium text-slate-500 dark:text-slate-400">{t('common.updateRegistry')}</p>
+            <div className="space-y-6">
               {role === 'technicien' && moduleConfig?.key === 'interventions' && drawerMode === 'edit' && (
                  <div className="rounded-xl border border-[#145f7a]/15 bg-white/80 dark:bg-slate-900/80 p-5 shadow-sm">
                     <h3 className="mb-4 flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200">
@@ -1912,7 +1872,7 @@ function RoleModulePage() {
                                                    <X className="h-3.5 w-3.5" />
                                                   </Button>
                                                )}
-                                             <Badge variant="outline" className={`text-[10px] ${pieceRec.statut === 'livree' ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : pieceRec.statut === 'approuvee' ? 'border-sky-200 bg-sky-50 text-sky-600' : 'border-amber-200 bg-amber-50 text-amber-600'}`}>
+                                             <Badge variant="outline" className={`text-[10px] border ${getDemandePieceStatusStyle(pieceRec.statut)}`}>
                                               {pieceRec.statut}
                                              </Badge>
                                            </div>
@@ -1924,7 +1884,7 @@ function RoleModulePage() {
                                   </div>
                                 )}
                                 
-                                {formData.statut === 'en_cours' && (
+                                {editingRow?.statut === 'en_cours' && (
                                    <div className="flex items-end gap-2 bg-white/60 dark:bg-slate-900/60 p-3 rounded-md border border-cyan-200/50">
                                       <div className="flex-1">
                                          <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Nouvelle Pièce</label>
@@ -2128,7 +2088,7 @@ function RoleModulePage() {
                       </label>
                     )
                   })}
-                  {role === 'manager' && moduleConfig?.key === 'demande-maintenances' && formData.statut === 'en_cours' && drawerMode === 'edit' && (() => {
+                  {acceptIntent && moduleConfig?.key === 'demande-maintenances' && drawerMode === 'edit' && (() => {
                      const originalRow = rows.find(r => r.id === editingId);
                      if (originalRow?.statut !== 'en_attente') return null;
                      
@@ -2176,47 +2136,28 @@ function RoleModulePage() {
               </div>
 
               {saveError ? (
-                <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
                   {saveError}
                 </p>
               ) : null}
             </div>
+      </AppModal>
 
-            <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 px-6 py-4 rounded-b-2xl flex items-center gap-3 justify-end sticky bottom-0">
-              <Button size="sm" variant="outline" className="h-9 px-4" onClick={closeDrawer}>
-                Annuler
-              </Button>
-              <Button size="sm" className="h-9 px-6 bg-[#145f7a] hover:bg-[#0c4358] shadow-sm" onClick={saveForm} disabled={saving}>
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {deleteModalState.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 mb-4">
-                <AlertTriangle className="h-8 w-8 text-rose-600 dark:text-rose-400" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Confirmer la suppression</h3>
-              <p className="text-slate-500 dark:text-slate-400 mb-6">
-                Êtes-vous sûr de vouloir supprimer l'élément <strong className="text-slate-800 dark:text-slate-200">{displayRoleValue(deleteModalState.row?.nom || deleteModalState.row?.numero_serie || deleteModalState.row?.nom_complet || deleteModalState.row?.username || deleteModalState.row?.id)}</strong> ? Cette action est irréversible.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
-                  Annuler
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
-                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={deleteModalState.isOpen}
+        onClose={() => setDeleteModalState({ isOpen: false, row: null })}
+        onConfirm={confirmDelete}
+        message={t('common.confirmDeleteMsg', {
+          name: displayRoleValue(
+            deleteModalState.row?.nom ||
+              deleteModalState.row?.numero_serie ||
+              deleteModalState.row?.nom_complet ||
+              deleteModalState.row?.username ||
+              deleteModalState.row?.id,
+          ),
+        })}
+        loading={deletingId === deleteModalState.row?.id}
+      />
     </div>
   )
 }

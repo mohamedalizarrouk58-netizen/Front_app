@@ -1,12 +1,16 @@
-import { LayoutDashboard, LogOut, UserRound } from 'lucide-react'
+import { LayoutDashboard, LogOut } from 'lucide-react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { ThemeToggle } from '../../components/ThemeToggle'
+import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 import { clearAuth, getStoredAuth } from '../../lib/auth'
 import { ROLE_WORKSPACES, roleDashboardPath, roleModulePath } from '../../lib/roleWorkspaces'
+import { tModule } from '../../lib/i18nLabels'
+import NavbarMessagesButton from '../../components/messaging/NavbarMessagesButton'
+import MessengerDock from '../../components/messaging/MessengerDock'
+import ConnectedUserCard from '../../components/ConnectedUserCard'
 
 function linkClasses(isActive) {
   return `sidebar-link w-full justify-between ${
@@ -70,7 +74,7 @@ function RoleLayout({ role }) {
               <NavLink
                 key={module.key}
                 to={toPath}
-                aria-label={module.label}
+                aria-label={tModule(module.key)}
                 className={({ isActive }) =>
                   `group relative flex h-11 w-11 items-center justify-center rounded-xl border hover:bg-slate-50 dark:hover:bg-slate-900 ${
                     isActive
@@ -80,13 +84,16 @@ function RoleLayout({ role }) {
                 }
               >
                 <Icon className="compact-sidebar-icon h-5 w-5" />
-                <span className="compact-sidebar-pill">{module.label}</span>
+                <span className="compact-sidebar-pill">{tModule(module.key)}</span>
               </NavLink>
             )
           })}
         </nav>
 
-        <ThemeToggle />
+        <div className="flex flex-col items-center gap-2">
+          <LanguageSwitcher />
+          <ThemeToggle />
+        </div>
       </aside>
 
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 overflow-y-auto border-r border-slate-200 dark:border-slate-700/50 bg-[#dce8ee]/95 dark:bg-slate-900/95 p-4 backdrop-blur-xl lg:block shadow-xl">
@@ -95,7 +102,7 @@ function RoleLayout({ role }) {
             <p className="text-xs font-bold uppercase tracking-widest text-[#1ea0d6] mb-1">
               {t(`role.${role}`, { defaultValue: role })}
             </p>
-            <h2 className="text-xl font-display font-semibold text-slate-900 dark:text-slate-100">{t('Workspace')}</h2>
+            <h2 className="text-xl font-display font-semibold text-slate-900 dark:text-slate-100">{t('nav.workspace')}</h2>
           </motion.div>
 
           <nav className="space-y-2 flex-1">
@@ -107,7 +114,7 @@ function RoleLayout({ role }) {
             </NavLink>
 
             <div className="pt-4 pb-2">
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-300 dark:text-slate-500 px-3">{t('Modules')}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-300 dark:text-slate-500 px-3">{t('nav.modules')}</p>
             </div>
 
             {workspace.modules && workspace.modules
@@ -123,7 +130,7 @@ function RoleLayout({ role }) {
                   >
                     <span className="inline-flex items-center gap-3">
                       <Icon className="h-5 w-5" />
-                      {module.label}
+                      {tModule(module.key)}
                     </span>
                   </NavLink>
                 </motion.div>
@@ -151,24 +158,15 @@ function RoleLayout({ role }) {
              className="mb-8 p-4 sm:p-5 rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700/60 shadow-sm"
           >
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="inline-flex items-center gap-4">
-                <div className={`inline-flex flex-shrink-0 h-12 w-12 items-center justify-center rounded-xl shadow-inner ${workspace.iconClass}`}>
-                  <UserRound className="h-6 w-6" />
-                </div>
-
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-[#1ea0d6] font-bold">{t('Connected User')}</p>
-                  <p className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">
-                    {auth?.username ?? t('User')}
-                  </p>
-                </div>
-              </div>
+              <ConnectedUserCard roleLabel={t(`role.${role}`)} />
 
               <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
+                <NavbarMessagesButton />
+                <LanguageSwitcher />
                 <ThemeToggle />
                 <Button variant="outline" onClick={handleLogout} className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10 shadow-sm rounded-xl">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Deconnexion
+                  {t('nav.logout')}
                 </Button>
               </div>
             </div>
@@ -187,6 +185,8 @@ function RoleLayout({ role }) {
           </AnimatePresence>
         </div>
       </section>
+
+      <MessengerDock />
     </main>
   )
 }

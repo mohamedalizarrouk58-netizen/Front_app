@@ -1,9 +1,17 @@
-import { ArrowLeft, Pencil, Plus, RefreshCw, Search, Trash2, X, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
+import { AppModal } from '../../components/ui/AppModal'
+import { ConfirmModal } from '../../components/ui/ConfirmModal'
+import { DataFiltersBar } from '../../components/ui/DataFiltersBar'
+import { DataPagination } from '../../components/ui/DataPagination'
+import { RecordCard, RecordField } from '../../components/ui/RecordCard'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useViewMode, viewContainerClass } from '../../hooks/useViewMode'
+import { DEFAULT_PAGE_SIZE } from '../../services/entities/crudService'
 import {
   Card,
   CardContent,
@@ -19,6 +27,9 @@ import {
   displayValue,
   toInputValue,
 } from './helpers'
+import { useOperationFeedback } from '../../context/OperationFeedbackContext'
+import { tColumn, tEntity } from '../../lib/i18nLabels'
+import { stripWorkflowFields } from '../../lib/workflowFields'
 
 function buildEmptyForm(entity, mode) {
   return entity.fields.reduce((accumulator, field) => {
@@ -92,6 +103,7 @@ function groupPieceRows(rows) {
 
 function EntityCrudPage() {
   const { t } = useTranslation()
+  const { runWithFeedback } = useOperationFeedback()
   const { entityKey } = useParams()
   const navigate = useNavigate()
 
@@ -106,10 +118,16 @@ function EntityCrudPage() {
   )
 
   const [rows, setRows] = useState([])
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [lookupData, setLookupData] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchText, setSearchText] = useState('')
+  const debouncedSearch = useDebouncedValue(searchText)
+  const [filterStatut, setFilterStatut] = useState('all')
+  const [viewMode, setViewMode] = useViewMode(`admin-entity-${entityKey ?? 'default'}`)
   const [drawerMode, setDrawerMode] = useState('')
   const [formData, setFormData] = useState({})
   const [editingId, setEditingId] = useState(null)
@@ -117,6 +135,8 @@ function EntityCrudPage() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
+
+  const hasStatutFilter = Boolean(entity?.columns?.includes('statut'))
 
   const loadRows = useCallback(async () => {
     if (!entity || !entityService) {
@@ -127,14 +147,22 @@ function EntityCrudPage() {
     setError('')
 
     try {
-      const list = await entityService.list()
-      setRows(list)
+      const params = { page, page_size: pageSize }
+      if (debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim()
+      }
+      if (hasStatutFilter && filterStatut !== 'all') {
+        params.statut = filterStatut
+      }
+      const { items, count } = await entityService.list(params)
+      setRows(items)
+      setTotalCount(count)
     } catch (requestError) {
       setError(extractApiErrorMessage(requestError, t('Failed to load {{entity}}.', { entity: entity.label })))
     } finally {
       setLoading(false)
     }
-  }, [entity, entityService, t])
+  }, [entity, entityService, t, page, pageSize, debouncedSearch, filterStatut, hasStatutFilter])
 
   const loadLookups = useCallback(async () => {
     if (!entity) {
@@ -157,7 +185,7 @@ function EntityCrudPage() {
       }
 
       try {
-        const items = await lookupService.list()
+        const items = await lookupService.listAll()
         return { serviceKey, items }
       } catch {
         return { serviceKey, items: [] }
@@ -175,6 +203,10 @@ function EntityCrudPage() {
   }, [entity])
 
   useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, filterStatut, entityKey])
+
+  useEffect(() => {
     if (!entity) {
       navigate('/admin', { replace: true })
       return
@@ -190,28 +222,26 @@ function EntityCrudPage() {
     }
   }, [entity, loadLookups, loadRows, navigate])
 
-  const filteredRows = useMemo(() => {
-    if (!searchText.trim()) {
-      return rows
-    }
-
-    const keyword = searchText.toLowerCase()
-
-    return rows.filter((row) => {
-      return Object.values(row).some((value) => displayValue(value).toLowerCase().includes(keyword))
-    })
-  }, [rows, searchText])
+  const hasActiveFilters = searchText.trim().length > 0 || (hasStatutFilter && filterStatut !== 'all')
 
   const groupedPieceRows = useMemo(() => {
     if (entity?.key !== 'pieces') {
       return []
     }
 
-    return groupPieceRows(filteredRows)
-  }, [entity?.key, filteredRows])
+    return groupPieceRows(rows)
+  }, [entity?.key, rows])
+
+  const departmentLimitReached =
+    entity?.maxRecords != null && totalCount >= entity.maxRecords
 
   const openCreate = () => {
     if (!entity) {
+      return
+    }
+
+    if (departmentLimitReached) {
+      setSaveError(t('departments.maxReached', { max: entity.maxRecords }))
       return
     }
 
@@ -254,6 +284,10 @@ function EntityCrudPage() {
     const payload = {}
 
     for (const field of entity.fields) {
+      if (field.key === 'is_deleted') {
+        continue
+      }
+
       if (field.createOnly && drawerMode === 'edit') {
         continue
       }
@@ -266,7 +300,7 @@ function EntityCrudPage() {
       const coerced = coercePayloadValue(rawValue, field.type)
 
       if (coerced === null || coerced === undefined) {
-        if (field.required && drawerMode === 'create') {
+        if ((field.required || field.requiredOnCreate) && drawerMode === 'create') {
           payload[field.key] = field.type === 'boolean' ? false : ''
         }
 
@@ -276,7 +310,7 @@ function EntityCrudPage() {
       payload[field.key] = coerced
     }
 
-    return payload
+    return stripWorkflowFields(payload)
   }
 
   const saveForm = async () => {
@@ -289,14 +323,32 @@ function EntityCrudPage() {
 
     const payload = buildPayload()
 
-    try {
-      if (drawerMode === 'create') {
-        await entityService.create(payload)
-      } else {
-        await entityService.update(editingId, payload)
-      }
+    const entityLabel = tEntity(entity.key)
 
-      await loadRows()
+    try {
+      await runWithFeedback(
+        async () => {
+          const saved =
+            drawerMode === 'create'
+              ? await entityService.create(payload)
+              : await entityService.update(editingId, payload)
+
+          await loadRows()
+
+          if (saved?.id) {
+            setRows((prev) => {
+              const without = prev.filter((row) => row.id !== saved.id)
+              return drawerMode === 'create' ? [saved, ...without] : without.map((row) => (row.id === saved.id ? { ...row, ...saved } : row))
+            })
+          }
+        },
+        {
+          action: drawerMode === 'create' ? 'create' : 'update',
+          entity: entityLabel,
+        },
+      )
+      setSearchText('')
+      setFilterStatut('all')
       closeDrawer()
     } catch (requestError) {
       setSaveError(extractApiErrorMessage(requestError, t('Unable to save changes.')))
@@ -314,8 +366,13 @@ function EntityCrudPage() {
     setDeletingId(rowId)
 
     try {
-      await entityService.remove(rowId)
-      await loadRows()
+      await runWithFeedback(
+        async () => {
+          await entityService.remove(rowId)
+          await loadRows()
+        },
+        { action: 'delete', entity: tEntity(entity.key) },
+      )
       setDeleteModalState({ isOpen: false, row: null })
     } catch (requestError) {
       setError(extractApiErrorMessage(requestError, t('Unable to delete record.')))
@@ -345,44 +402,67 @@ function EntityCrudPage() {
 
             <div>
             <h1 className="font-display text-2xl font-semibold text-slate-900 dark:text-slate-100 sm:text-3xl">
-              {entity.label}
+              {tEntity(entity.key)}
             </h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 sm:text-base">
-              {t('Full CRUD management for {{entity}}.', { entity: entity.label.toLowerCase() })}
+              {entity.key === 'departments'
+                ? t('departments.subtitle', { max: entity.maxRecords ?? 5 })
+                : t('Full CRUD management for {{entity}}.', { entity: tEntity(entity.key).toLowerCase() })}
             </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button onClick={openCreate}>
+            {entity.key === 'departments' ? (
+              <Badge variant="outline" className="border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                {totalCount} / {entity.maxRecords ?? 5}
+              </Badge>
+            ) : null}
+            <Button onClick={openCreate} disabled={departmentLimitReached}>
               <Plus className="mr-2 h-4 w-4" />
               {t('New Record')}
             </Button>
           </div>
         </div>
 
-        <div className="mt-4 relative">
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-300" />
-          <input
-            className="h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 pl-9 pr-3 text-sm outline-none ring-[#145f7a]/40 transition focus:ring-2"
-            placeholder={t('Search {{entity}}', { entity: entity.label })}
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-          />
-        </div>
       </header>
 
-      <Card className="animate-rise delay-1 border-0 shadow-none bg-transparent">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200">{t('{{entity}} Records', { entity: entity.label })}</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {t('{{shown}} / {{total}} shown', { shown: filteredRows.length, total: rows.length })}
-            </p>
-          </div>
-        </div>
+      <DataFiltersBar
+        searchValue={searchText}
+        onSearchChange={setSearchText}
+        searchPlaceholder={t('Search {{entity}}', { entity: tEntity(entity.key) })}
+        shown={rows.length}
+        total={totalCount}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={() => {
+          setSearchText('')
+          setFilterStatut('all')
+        }}
+        filters={
+          hasStatutFilter
+            ? [
+                {
+                  id: 'statut',
+                  label: t('columns.statut'),
+                  value: filterStatut,
+                  onChange: setFilterStatut,
+                  options: [
+                    { value: 'all', label: t('common.allStatuses') },
+                    { value: 'en_attente', label: t('status.en_attente') },
+                    { value: 'en_cours', label: t('status.en_cours') },
+                    { value: 'termine', label: t('status.termine') },
+                    { value: 'refuse', label: t('module.notResolved') },
+                  ],
+                },
+              ]
+            : []
+        }
+      />
 
-        <div className="space-y-3">
+      <Card className="animate-rise delay-1 border-0 shadow-none bg-transparent">
+        <div className={viewContainerClass(viewMode)}>
           {error ? (
             <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
               {error}
@@ -394,7 +474,7 @@ function EntityCrudPage() {
               <div key={group.key} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-3 shadow-sm lg:p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border-l-4 border-[#145f7a] bg-slate-50 dark:bg-slate-900 px-4 py-3">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-300">Pièce principale</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-300">{t('common.mainPart')}</p>
                     <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{group.label}</h3>
                   </div>
 
@@ -416,17 +496,17 @@ function EntityCrudPage() {
                       <div className="table-row-grid flex-1 w-full" style={{ '--row-grid-cols': `64px repeat(${entity.columns.length - 1}, minmax(0, 1fr))` }}>
                         {entity.columns.map((column, colIndex) => (
                           <div key={`${column}-${group.key}-${rowIndex}`} className="flex flex-col min-w-0">
-                            <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{column.replace(/_/g, ' ')}</span>
+                            <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{tColumn(column)}</span>
 
                             {colIndex === 0 ? (
                               <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">#{displayValue(row[column])}</span>
                             ) : column === 'est_payee' ? (
                               <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold ${row[column] === true || row[column] === 'true' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
-                                {row[column] === true || row[column] === 'true' ? 'PAYÉE' : 'NON PAYÉE'}
+                                {row[column] === true || row[column] === 'true' ? t('common.paid') : t('common.unpaid')}
                               </span>
                             ) : typeof row[column] === 'boolean' || row[column] === 'true' || row[column] === 'false' || column.startsWith('est_') ? (
                               <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold ${row[column] === true || row[column] === 'true' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
-                                {row[column] === true || row[column] === 'true' ? 'OUI' : 'NON'}
+                                {row[column] === true || row[column] === 'true' ? t('crud.yes') : t('crud.no')}
                               </span>
                             ) : column === 'statut' ? (
                               <span className={`w-fit text-[10px] px-2 py-0.5 rounded-full inline-flex font-semibold border
@@ -446,7 +526,7 @@ function EntityCrudPage() {
 
                       <div className="mt-3 flex items-center justify-end gap-2 sm:mt-0 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto sm:w-[200px]">
                         <Button size="sm" variant="ghost" className="h-8 px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
-                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> {t('crud.edit')}
                         </Button>
 
                         <Button
@@ -456,7 +536,7 @@ function EntityCrudPage() {
                           onClick={() => setDeleteModalState({ isOpen: true, row })}
                           disabled={deletingId === row.id}
                         >
-                          <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Supprimer
+                          <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('crud.delete')}
                         </Button>
                       </div>
                     </li>
@@ -465,7 +545,24 @@ function EntityCrudPage() {
               </div>
             ))
           ) : (
-             filteredRows.map((row, rowIndex) => (
+             rows.map((row, rowIndex) => (
+              viewMode === 'cards' ? (
+                <RecordCard key={row.id ?? `${entity.key}-${rowIndex}`} className="flex flex-col gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {entity.columns.slice(0, 6).map((column) => (
+                      <RecordField key={column} label={tColumn(column)} value={displayValue(row[column])} />
+                    ))}
+                  </div>
+                  <div className="flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(row)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" /> {t('crud.edit')}
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1 text-rose-600" onClick={() => setDeleteModalState({ isOpen: true, row })} disabled={deletingId === row.id}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('crud.delete')}
+                    </Button>
+                  </div>
+                </RecordCard>
+              ) : (
               <div key={row.id ?? `${entity.key}-${rowIndex}`} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border p-3 shadow-sm transition-all hover:shadow-md lg:p-4 ${
                 row.statut === 'refuse' ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-900/30' :
                 row.statut === 'termine' ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/40' :
@@ -475,17 +572,17 @@ function EntityCrudPage() {
                 <div className="table-row-grid flex-1 w-full" style={{ '--row-grid-cols': `64px repeat(${entity.columns.length - 1}, minmax(0, 1fr))` }}>
                   {entity.columns.map((column, colIndex) => (
                     <div key={`${column}-${rowIndex}`} className="flex flex-col min-w-0">
-                      <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{column.replace(/_/g, ' ')}</span>
+                      <span className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-300">{tColumn(column)}</span>
 
                       {colIndex === 0 ? (
                         <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">#{displayValue(row[column])}</span>
                       ) : column === 'est_payee' ? (
                         <span className={`w-fit text-[10px] px-2 py-0.5 rounded-full inline-flex font-semibold ${row[column] === true || row[column] === 'true' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                          {row[column] === true || row[column] === 'true' ? 'PAYÉE' : 'NON PAYÉE'}
+                          {row[column] === true || row[column] === 'true' ? t('common.paid') : t('common.unpaid')}
                         </span>
                       ) : typeof row[column] === 'boolean' || row[column] === 'true' || row[column] === 'false' || column.startsWith('est_') ? (
                         <span className={`w-fit text-[10px] px-2 py-0.5 rounded-full inline-flex font-semibold ${row[column] === true || row[column] === 'true' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                          {row[column] === true || row[column] === 'true' ? 'OUI' : 'NON'}
+                          {row[column] === true || row[column] === 'true' ? t('crud.yes') : t('crud.no')}
                         </span>
                       ) : column === 'statut' ? (
                         <span className={`w-fit text-[10px] px-2 py-0.5 rounded-full inline-flex font-semibold border
@@ -505,7 +602,7 @@ function EntityCrudPage() {
 
                 <div className="flex shrink-0 items-center justify-end gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 self-end sm:self-auto mt-2 sm:mt-0 sm:w-[200px]">
                   <Button size="sm" variant="ghost" className="h-8 px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" /> {t('crud.edit')}
                   </Button>
 
                   <Button
@@ -515,38 +612,55 @@ function EntityCrudPage() {
                     onClick={() => setDeleteModalState({ isOpen: true, row })}
                     disabled={deletingId === row.id}
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Supprimer
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('crud.delete')}
                   </Button>
                 </div>
               </div>
+              )
             ))
           )}
 
-          {!loading && filteredRows.length === 0 ? (
+          {!loading && rows.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-slate-400 dark:text-slate-300 bg-white/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
-               <p className="text-sm">Aucun enregistrement trouvé pour ce filtre.</p>
+               <p className="text-sm">{t('common.noRecordsFilter')}</p>
             </div>
           ) : null}
         </div>
       </Card>
 
-      {drawerMode ? (
-        <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40 backdrop-blur-sm">
-          <div className="h-full w-full max-w-xl overflow-auto border-l border-white/60 bg-[#e6eff3] p-4 sm:p-5">
-            <div className="glass-panel h-full p-4 sm:p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="font-display text-xl font-semibold text-slate-900 dark:text-slate-100">
-                    {drawerMode === 'create' ? t('Create') : t('Edit')} {entity.label}
-                  </h2>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{t('Fill the fields and save changes.')}</p>
-                </div>
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={totalCount}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => {
+          setPageSize(size)
+          setPage(1)
+        }}
+        disabled={loading}
+      />
 
-                <Button variant="ghost" size="sm" onClick={closeDrawer}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
+      <AppModal
+        open={Boolean(drawerMode)}
+        onClose={closeDrawer}
+        eyebrow={drawerMode === 'create' ? t('crud.create') : t('crud.edit')}
+        title={tEntity(entity.key)}
+        size="lg"
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Badge className="border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-900/70 text-slate-600 dark:text-slate-400">
+              {drawerMode === 'create' ? t('Create mode') : t('Edit mode')}
+            </Badge>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={closeDrawer}>{t('crud.cancel')}</Button>
+              <Button onClick={saveForm} disabled={saving} className="bg-sky-600 hover:bg-sky-700">
+                {saving ? t('crud.saving') : t('crud.save')}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+              <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{t('Fill the fields and save changes.')}</p>
               <div className="space-y-3">
                 {entity.fields
                   .filter((field) => !(field.createOnly && drawerMode === 'edit'))
@@ -692,50 +806,26 @@ function EntityCrudPage() {
               </div>
 
               {saveError ? (
-                <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
                   {saveError}
                 </p>
               ) : null}
+      </AppModal>
 
-              <div className="mt-4 flex items-center gap-2">
-                <Button onClick={saveForm} disabled={saving}>
-                  {saving ? t('Saving...') : t('Save')}
-                </Button>
-                <Button variant="outline" onClick={closeDrawer}>
-                  {t('Cancel')}
-                </Button>
-                <Badge className="ml-auto border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-900/70 text-slate-600 dark:text-slate-400">
-                  {drawerMode === 'create' ? t('Create mode') : t('Edit mode')}
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {deleteModalState.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 mb-4">
-                <AlertTriangle className="h-8 w-8 text-rose-600 dark:text-rose-400" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Confirmer la suppression</h3>
-              <p className="text-slate-500 dark:text-slate-400 mb-6">
-                Êtes-vous sûr de vouloir supprimer l'élément <strong className="text-slate-800 dark:text-slate-200">{displayValue(deleteModalState.row?.nom || deleteModalState.row?.nom_complet || deleteModalState.row?.username || deleteModalState.row?.id)}</strong> ? Cette action est irréversible.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
-                  Annuler
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
-                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={deleteModalState.isOpen}
+        onClose={() => setDeleteModalState({ isOpen: false, row: null })}
+        onConfirm={confirmDelete}
+        message={t('common.confirmDeleteMsg', {
+          name: displayValue(
+            deleteModalState.row?.nom ||
+              deleteModalState.row?.nom_complet ||
+              deleteModalState.row?.username ||
+              deleteModalState.row?.id,
+          ),
+        })}
+        loading={deletingId === deleteModalState.row?.id}
+      />
     </div>
   )
 }

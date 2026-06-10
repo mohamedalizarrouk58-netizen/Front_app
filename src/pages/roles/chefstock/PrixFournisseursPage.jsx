@@ -1,24 +1,32 @@
-import { ArrowLeft, Plus, Search, Pencil, Trash2, X, RefreshCw, AlertCircle, AlertTriangle } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { ArrowLeft, Plus, Pencil, Trash2, RefreshCw, AlertCircle } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
+import { AppModal } from '../../../components/ui/AppModal'
+import { ConfirmModal } from '../../../components/ui/ConfirmModal'
+import { DataFiltersBar } from '../../../components/ui/DataFiltersBar'
+import { RecordCard, RecordField } from '../../../components/ui/RecordCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
+import { useOperationFeedback } from '../../../context/OperationFeedbackContext'
+import { useViewMode, viewContainerClass } from '../../../hooks/useViewMode'
 import { Input } from '../../../components/ui/input'
 import { extractApiErrorMessage } from '../../../lib/api'
 import { entityServices } from '../../../services/entities'
 
 function PrixFournisseursPage() {
   const { t } = useTranslation()
+  const { runWithFeedback } = useOperationFeedback()
   const navigate = useNavigate()
   const [prix, setPrix] = useState([])
-  const [filteredPrix, setFilteredPrix] = useState([])
   const [pieces, setPieces] = useState([])
   const [fournisseurs, setFournisseurs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterFournisseur, setFilterFournisseur] = useState('all')
+  const [viewMode, setViewMode] = useViewMode('chefstock-prix')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
@@ -35,14 +43,13 @@ function PrixFournisseursPage() {
     setError('')
     try {
       const [demandesData, piecesData, fournisseursData] = await Promise.all([
-        entityServices['demande-pieces'].list(),
-        entityServices.pieces.list(),
-        entityServices.fournisseurs.list(),
+        entityServices['demande-pieces'].listAll(),
+        entityServices.pieces.listAll(),
+        entityServices.fournisseurs.listAll(),
       ])
       
       const livreeDemandes = demandesData.filter(d => d.statut === 'livree')
       setPrix(livreeDemandes)
-      setFilteredPrix(livreeDemandes)
       setPieces(piecesData)
       setFournisseurs(fournisseursData)
     } catch (err) {
@@ -56,17 +63,21 @@ function PrixFournisseursPage() {
     loadData()
   }, [loadData])
 
-  useEffect(() => {
-    const filtered = prix.filter(p => {
-      const pieceName = pieces.find(pi => pi.id === p.piece)?.nom || ''
-      const fournisseurName = fournisseurs.find(f => f.id === p.fournisseur)?.nom || ''
-      return (
-        pieceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        fournisseurName.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+  const filteredPrix = useMemo(() => {
+    let result = prix
+    if (filterFournisseur !== 'all') {
+      result = result.filter((p) => String(p.fournisseur) === filterFournisseur)
+    }
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return result
+    return result.filter((p) => {
+      const pieceName = pieces.find((pi) => pi.id === p.piece)?.nom || ''
+      const fournisseurName = fournisseurs.find((f) => f.id === p.fournisseur)?.nom || ''
+      return pieceName.toLowerCase().includes(q) || fournisseurName.toLowerCase().includes(q)
     })
-    setFilteredPrix(filtered)
-  }, [searchTerm, prix, pieces, fournisseurs])
+  }, [searchTerm, prix, pieces, fournisseurs, filterFournisseur])
+
+  const hasActiveFilters = filterFournisseur !== 'all' || searchTerm.trim().length > 0
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -82,12 +93,20 @@ function PrixFournisseursPage() {
     setError('')
 
     try {
-      if (editingId) {
-        await entityServices['demande-pieces'].update(editingId, formData)
-      } else {
-        await entityServices['demande-pieces'].create({ ...formData, statut: 'livree' })
-      }
-      loadData()
+      await runWithFeedback(
+        async () => {
+          if (editingId) {
+            await entityServices['demande-pieces'].update(editingId, formData)
+          } else {
+            await entityServices['demande-pieces'].create({ ...formData, statut: 'livree' })
+          }
+          await loadData()
+        },
+        {
+          action: editingId ? 'update' : 'create',
+          entity: t('achat.factures'),
+        },
+      )
       resetForm()
       setShowForm(false)
     } catch (err) {
@@ -117,8 +136,16 @@ function PrixFournisseursPage() {
     setDeletingId(deleteModalState.row.id)
     setError('')
     try {
-      await entityServices['demande-pieces'].remove(deleteModalState.row.id)
-      loadData()
+      await runWithFeedback(
+        async () => {
+          await entityServices['demande-pieces'].remove(deleteModalState.row.id)
+          await loadData()
+        },
+        {
+          action: 'delete',
+          entity: `${getFournisseurName(deleteModalState.row.fournisseur)} — ${getPieceName(deleteModalState.row.piece)}`,
+        },
+      )
       setDeleteModalState({ isOpen: false, row: null })
     } catch (err) {
       setError(extractApiErrorMessage(err, 'Erreur lors de la suppression'))
@@ -309,45 +336,62 @@ function PrixFournisseursPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="flex gap-2 relative z-10">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-          <Input
-            placeholder="Rechercher par pièce ou fournisseur..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12 rounded-2xl border-slate-200/80 bg-white/80 backdrop-blur-md shadow-sm focus:bg-white focus:ring-[#145f7a]/40"
-          />
-        </div>
-      </div>
+      <DataFiltersBar
+        className="relative z-10"
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder={t('prix.searchPlaceholder')}
+        shown={filteredPrix.length}
+        total={prix.length}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={() => {
+          setSearchTerm('')
+          setFilterFournisseur('all')
+        }}
+        filters={[
+          {
+            id: 'fournisseur',
+            label: t('commande.fournisseur'),
+            value: filterFournisseur,
+            onChange: setFilterFournisseur,
+            options: [
+              { value: 'all', label: t('common.all') },
+              ...fournisseurs.map((f) => ({ value: String(f.id), label: f.nom })),
+            ],
+          },
+        ]}
+      />
 
-      {/* Form Overlay */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-2xl bg-white/95 backdrop-blur-xl border-white/40 shadow-2xl rounded-3xl overflow-hidden animate-in zoom-in-95">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-5">
-              <div>
-                <CardTitle className="text-xl font-bold text-slate-800">
-                  {editingId ? 'Modifier le Prix' : 'Nouveau Prix Fournisseur'}
-                </CardTitle>
-                <CardDescription className="text-slate-500 mt-1">
-                  Définissez la tarification et les conditions de livraison.
-                </CardDescription>
-              </div>
-              <button
-                onClick={() => {
-                  resetForm()
-                  setShowForm(false)
-                }}
-                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </CardHeader>
-
-            <CardContent className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-5">
+      <AppModal
+        open={showForm}
+        onClose={() => {
+          resetForm()
+          setShowForm(false)
+        }}
+        eyebrow={editingId ? t('crud.edit') : t('crud.create')}
+        title={editingId ? t('common.editPrice') : t('common.newPrice')}
+        size="lg"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                resetForm()
+                setShowForm(false)
+              }}
+            >
+              {t('crud.cancel')}
+            </Button>
+            <Button type="submit" form="prix-fournisseur-form" disabled={loading} className="bg-sky-600 hover:bg-sky-700">
+              {loading ? t('crud.saving') : t('crud.save')}
+            </Button>
+          </div>
+        }
+      >
+              <form id="prix-fournisseur-form" onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-1.5">
                     <label className="text-sm font-semibold text-slate-700">Pièce <span className="text-rose-500">*</span></label>
@@ -409,132 +453,101 @@ function PrixFournisseursPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-6 mt-4 border-t border-slate-100">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      resetForm()
-                      setShowForm(false)
-                    }}
-                    className="h-11 px-6 rounded-xl hover:bg-slate-100 text-slate-600"
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="h-11 px-8 rounded-xl bg-[#145f7a] hover:bg-[#0c4358] shadow-md text-white font-medium"
-                  >
-                    {editingId ? 'Mettre à jour' : 'Enregistrer le tarif'}
-                  </Button>
-                </div>
               </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      </AppModal>
 
-      {/* List */}
-      <Card className="overflow-hidden border-slate-200/80 bg-white/60 backdrop-blur-xl shadow-xl rounded-3xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/50">
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Pièce</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Fournisseur</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Prix</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">Quantité demandée</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">Date facture</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredPrix.map((prixItem) => (
-                <tr key={prixItem.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 text-sm font-bold text-slate-800">{getPieceName(prixItem.piece)}</td>
-                  <td className="px-6 py-4 text-sm text-slate-600 font-medium">{getFournisseurName(prixItem.fournisseur)}</td>
-                  <td className="px-6 py-4 text-sm text-right">
-                    <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
-                      {prixItem.prix_propose_fournisseur || '0.00'} TND
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-center text-slate-600">
-                    {prixItem.quantite}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-center text-slate-600">
-                    {new Date(prixItem.date_reponse_fournisseur || prixItem.date_demande).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex justify-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 rounded-lg text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800"
-                        onClick={() => printFacture(prixItem)}
-                      >
-                        Imprimer
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-[#145f7a] hover:bg-sky-50 rounded-lg"
-                        onClick={() => handleEdit(prixItem)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                        onClick={() => handleDeleteClick(prixItem)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
+      {filteredPrix.length === 0 ? (
+        <Card className="rounded-3xl border-dashed border-slate-200 bg-white/60 p-12 text-center dark:border-slate-700 dark:bg-slate-900/60">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{t('common.noPriceFound')}</h3>
+          <p className="text-slate-500 mt-1 max-w-sm mx-auto">{t('common.noRecordsFilter')}</p>
+        </Card>
+      ) : viewMode === 'cards' ? (
+        <div className={viewContainerClass(viewMode)}>
+          {filteredPrix.map((prixItem) => (
+            <RecordCard key={prixItem.id} className="flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-bold text-slate-900 dark:text-slate-100">{getPieceName(prixItem.piece)}</h3>
+                <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 text-sm">
+                  {prixItem.prix_propose_fournisseur || '0.00'} TND
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <RecordField label={t('commande.fournisseur')} value={getFournisseurName(prixItem.fournisseur)} />
+                <RecordField label={t('common.quantity')} value={prixItem.quantite} />
+                <RecordField label="Date" value={new Date(prixItem.date_reponse_fournisseur || prixItem.date_demande).toLocaleDateString()} />
+              </div>
+              <div className="flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <Button variant="outline" size="sm" className="flex-1 text-emerald-700" onClick={() => printFacture(prixItem)}>
+                  Imprimer
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleEdit(prixItem)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="text-rose-600" onClick={() => handleDeleteClick(prixItem)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </RecordCard>
+          ))}
+        </div>
+      ) : (
+        <Card className="overflow-hidden border-slate-200/80 bg-white/60 backdrop-blur-xl shadow-xl rounded-3xl dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-800/50">
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Pièce</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">{t('commande.fournisseur')}</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Prix</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">{t('common.quantity')}</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">Date</th>
+                  <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-center">{t('crud.actions')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredPrix.length === 0 && (
-            <div className="text-center py-16 px-6">
-              <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 mb-4">
-                <Search className="h-8 w-8 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900">Aucun tarif trouvé</h3>
-              <p className="text-slate-500 mt-1 max-w-sm mx-auto">
-                Commencez par ajouter des prix fournisseurs pour vos pièces ou modifiez vos critères de recherche.
-              </p>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Delete Confirmation Modal */}
-      {deleteModalState.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 mb-4">
-                <AlertTriangle className="h-8 w-8 text-rose-600" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Confirmer la suppression</h3>
-              <p className="text-slate-500 mb-6">
-                Êtes-vous sûr de vouloir supprimer la facture de <strong className="text-slate-800">{getFournisseurName(deleteModalState.row?.fournisseur)}</strong> pour <strong className="text-slate-800">{getPieceName(deleteModalState.row?.piece)}</strong> ? Cette action est irréversible.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
-                  Annuler
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
-                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
-                </Button>
-              </div>
-            </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredPrix.map((prixItem) => (
+                  <tr key={prixItem.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-6 py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{getPieceName(prixItem.piece)}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 font-medium">{getFournisseurName(prixItem.fournisseur)}</td>
+                    <td className="px-6 py-4 text-sm text-right">
+                      <span className="font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                        {prixItem.prix_propose_fournisseur || '0.00'} TND
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-center text-slate-600 dark:text-slate-300">{prixItem.quantite}</td>
+                    <td className="px-6 py-4 text-sm text-center text-slate-600 dark:text-slate-300">
+                      {new Date(prixItem.date_reponse_fournisseur || prixItem.date_demande).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center gap-2">
+                        <Button variant="outline" size="sm" className="gap-2 rounded-lg text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={() => printFacture(prixItem)}>
+                          Imprimer
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#145f7a] hover:bg-sky-50 rounded-lg" onClick={() => handleEdit(prixItem)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg" onClick={() => handleDeleteClick(prixItem)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </Card>
       )}
+
+      <ConfirmModal
+        open={deleteModalState.isOpen}
+        onClose={() => setDeleteModalState({ isOpen: false, row: null })}
+        onConfirm={confirmDelete}
+        message={t('common.confirmDeleteMsg', {
+          name: `${getFournisseurName(deleteModalState.row?.fournisseur)} — ${getPieceName(deleteModalState.row?.piece)}`,
+        })}
+        loading={deletingId === deleteModalState.row?.id}
+      />
     </div>
   )
 }

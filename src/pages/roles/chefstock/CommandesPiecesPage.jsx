@@ -1,11 +1,17 @@
-import { ArrowLeft, Plus, Search, Pencil, Trash2, X, RefreshCw, AlertCircle, Eye, AlertTriangle } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { ArrowLeft, Plus, Pencil, Trash2, RefreshCw, AlertCircle, Eye } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
+import { AppModal } from '../../../components/ui/AppModal'
+import { ConfirmModal } from '../../../components/ui/ConfirmModal'
+import { DataFiltersBar } from '../../../components/ui/DataFiltersBar'
+import { RecordCard, RecordField } from '../../../components/ui/RecordCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Input } from '../../../components/ui/input'
+import { useOperationFeedback } from '../../../context/OperationFeedbackContext'
+import { useViewMode, viewContainerClass } from '../../../hooks/useViewMode'
 import { extractApiErrorMessage } from '../../../lib/api'
 import { entityServices } from '../../../services/entities'
 
@@ -19,13 +25,15 @@ const STATUTS = [
 
 function CommandesPiecesPage() {
   const { t } = useTranslation()
+  const { runWithFeedback } = useOperationFeedback()
   const navigate = useNavigate()
   const [commandes, setCommandes] = useState([])
-  const [filteredCommandes, setFilteredCommandes] = useState([])
   const [fournisseurs, setFournisseurs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatut, setFilterStatut] = useState('all')
+  const [viewMode, setViewMode] = useViewMode('chefstock-commandes')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
@@ -34,7 +42,6 @@ function CommandesPiecesPage() {
   const [formData, setFormData] = useState({
     numero_commande: '',
     fournisseur: '',
-    statut: 'brouillon',
     montant_total: 0,
     date_livraison_prevue: '',
     remarques: '',
@@ -45,11 +52,10 @@ function CommandesPiecesPage() {
     setError('')
     try {
       const [commandesData, fournisseursData] = await Promise.all([
-        entityServices['commandes-pieces'].list(),
-        entityServices.fournisseurs.list(),
+        entityServices['commandes-pieces'].listAll(),
+        entityServices.fournisseurs.listAll(),
       ])
       setCommandes(commandesData)
-      setFilteredCommandes(commandesData)
       setFournisseurs(fournisseursData)
     } catch (err) {
       setError(extractApiErrorMessage(err, 'Erreur lors du chargement'))
@@ -62,12 +68,20 @@ function CommandesPiecesPage() {
     loadData()
   }, [loadData])
 
-  useEffect(() => {
-    const filtered = commandes.filter(c =>
-      c.numero_commande.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    setFilteredCommandes(filtered)
-  }, [searchTerm, commandes])
+  const filteredCommandes = useMemo(() => {
+    let result = commandes
+    if (filterStatut !== 'all') {
+      result = result.filter((c) => c.statut === filterStatut)
+    }
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return result
+    return result.filter((c) => {
+      const fournisseurName = fournisseurs.find((f) => f.id === c.fournisseur)?.nom || ''
+      return c.numero_commande.toLowerCase().includes(q) || fournisseurName.toLowerCase().includes(q)
+    })
+  }, [commandes, searchTerm, filterStatut, fournisseurs])
+
+  const hasActiveFilters = filterStatut !== 'all' || searchTerm.trim().length > 0
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -82,13 +96,23 @@ function CommandesPiecesPage() {
     setLoading(true)
     setError('')
 
+    const { statut: _ignoredStatut, ...payload } = formData
+
     try {
-      if (editingId) {
-        await entityServices['commandes-pieces'].update(editingId, formData)
-      } else {
-        await entityServices['commandes-pieces'].create(formData)
-      }
-      loadData()
+      await runWithFeedback(
+        async () => {
+          if (editingId) {
+            await entityServices['commandes-pieces'].update(editingId, payload)
+          } else {
+            await entityServices['commandes-pieces'].create(payload)
+          }
+          await loadData()
+        },
+        {
+          action: editingId ? 'update' : 'create',
+          entity: t('commande.title'),
+        },
+      )
       resetForm()
       setShowForm(false)
     } catch (err) {
@@ -113,8 +137,13 @@ function CommandesPiecesPage() {
     setDeletingId(deleteModalState.row.id)
     setError('')
     try {
-      await entityServices['commandes-pieces'].delete(deleteModalState.row.id)
-      loadData()
+      await runWithFeedback(
+        async () => {
+          await entityServices['commandes-pieces'].delete(deleteModalState.row.id)
+          await loadData()
+        },
+        { action: 'delete', entity: deleteModalState.row.numero_commande },
+      )
       setDeleteModalState({ isOpen: false, row: null })
     } catch (err) {
       setError(extractApiErrorMessage(err, 'Erreur lors de la suppression'))
@@ -127,7 +156,6 @@ function CommandesPiecesPage() {
     setFormData({
       numero_commande: '',
       fournisseur: '',
-      statut: 'brouillon',
       montant_total: 0,
       date_livraison_prevue: '',
       remarques: '',
@@ -159,8 +187,8 @@ function CommandesPiecesPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Commandes de pièces</h1>
-            <p className="text-gray-500 mt-1">Gérez les commandes auprès des fournisseurs</p>
+            <h1 className="text-3xl font-bold tracking-tight dark:text-slate-100">{t('commande.title')}</h1>
+            <p className="text-gray-500 dark:text-slate-400 mt-1">{t('achat.suiviDesc')}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -195,41 +223,57 @@ function CommandesPiecesPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="flex gap-2">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Rechercher par numéro de commande..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
+      <DataFiltersBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder={t('commande.searchPlaceholder')}
+        shown={filteredCommandes.length}
+        total={commandes.length}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={() => {
+          setSearchTerm('')
+          setFilterStatut('all')
+        }}
+        filters={[
+          {
+            id: 'statut',
+            label: t('columns.statut'),
+            value: filterStatut,
+            onChange: setFilterStatut,
+            options: [
+              { value: 'all', label: t('common.allStatuses') },
+              ...STATUTS.map((s) => ({ value: s.value, label: s.label })),
+            ],
+          },
+        ]}
+      />
 
-      {/* Form */}
-      {showForm && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle>{editingId ? 'Modifier' : 'Nouvelle'} Commande</CardTitle>
-            </div>
-            <button
-              onClick={() => {
-                resetForm()
-                setShowForm(false)
-              }}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+      <AppModal
+        open={showForm}
+        onClose={() => {
+          resetForm()
+          setShowForm(false)
+        }}
+        eyebrow={editingId ? t('crud.edit') : t('crud.create')}
+        title={editingId ? t('commande.editTitle') : t('commande.createTitle')}
+        size="lg"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => { resetForm(); setShowForm(false) }}>
+              {t('crud.cancel')}
+            </Button>
+            <Button type="submit" form="commande-form" disabled={loading} className="bg-sky-600 hover:bg-sky-700">
+              {editingId ? t('crud.edit') : t('crud.create')}
+            </Button>
+          </div>
+        }
+      >
+            <form id="commande-form" onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Numéro de commande *</label>
+                  <label className="block text-sm font-medium mb-1">{t('commande.numero')} *</label>
                   <Input
                     name="numero_commande"
                     value={formData.numero_commande}
@@ -239,7 +283,7 @@ function CommandesPiecesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Fournisseur *</label>
+                  <label className="block text-sm font-medium mb-1">{t('commande.fournisseur')} *</label>
                   <select
                     name="fournisseur"
                     value={formData.fournisseur}
@@ -247,27 +291,14 @@ function CommandesPiecesPage() {
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Sélectionner un fournisseur</option>
+                    <option value="">{t('achat.selectSupplier')}</option>
                     {fournisseurs.map(f => (
                       <option key={f.id} value={f.id}>{f.nom}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Statut</label>
-                  <select
-                    name="statut"
-                    value={formData.statut}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {STATUTS.map(st => (
-                      <option key={st.value} value={st.value}>{st.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Date de livraison prévue</label>
+                  <label className="block text-sm font-medium mb-1">{t('commande.datePrevue')}</label>
                   <Input
                     name="date_livraison_prevue"
                     type="datetime-local"
@@ -276,7 +307,7 @@ function CommandesPiecesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Montant total</label>
+                  <label className="block text-sm font-medium mb-1">{t('commande.montant')}</label>
                   <Input
                     name="montant_total"
                     type="number"
@@ -297,48 +328,24 @@ function CommandesPiecesPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={loading}>
-                  {editingId ? 'Modifier' : 'Créer'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    resetForm()
-                    setShowForm(false)
-                  }}
-                >
-                  Annuler
-                </Button>
-              </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+      </AppModal>
 
-      {/* Detail View */}
-      {selectedDetail && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle>Détails de la commande</CardTitle>
-            </div>
-            <button
-              onClick={() => setSelectedDetail(null)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <AppModal
+        open={Boolean(selectedDetail)}
+        onClose={() => setSelectedDetail(null)}
+        eyebrow={t('commande.title')}
+        title={t('crud.details')}
+        size="md"
+      >
+          <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-500">Numéro de commande</p>
+                <p className="text-sm text-gray-500">{t('commande.numero')}</p>
                 <p className="font-medium">{selectedDetail.numero_commande}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Fournisseur</p>
+                <p className="text-sm text-gray-500">{t('commande.fournisseur')}</p>
                 <p className="font-medium">{getFournisseurName(selectedDetail.fournisseur)}</p>
               </div>
               <div>
@@ -348,7 +355,7 @@ function CommandesPiecesPage() {
                 </Badge>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Montant total</p>
+                <p className="text-sm text-gray-500">{t('commande.montant')}</p>
                 <p className="font-medium">{selectedDetail.montant_total} DT</p>
               </div>
             </div>
@@ -358,97 +365,91 @@ function CommandesPiecesPage() {
                 <p className="text-sm">{selectedDetail.remarques}</p>
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+      </AppModal>
 
-      {/* List */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="px-4 py-3 text-left text-sm font-semibold">Numéro</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Fournisseur</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Montant</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Date de commande</th>
-              <th className="px-4 py-3 text-center text-sm font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCommandes.map((commande) => (
-              <tr key={commande.id} className="border-b hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm font-medium">{commande.numero_commande}</td>
-                <td className="px-4 py-3 text-sm">{getFournisseurName(commande.fournisseur)}</td>
-                <td className="px-4 py-3 text-sm">
-                  <Badge className={getStatutBadge(commande.statut).color}>
-                    {getStatutBadge(commande.statut).label}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-sm">{commande.montant_total} DT</td>
-                <td className="px-4 py-3 text-sm">
-                  {new Date(commande.date_commande).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <div className="flex justify-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedDetail(commande)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(commande)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteClick(commande)}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
-                  </div>
-                </td>
+      {filteredCommandes.length === 0 ? (
+        <div className="text-center py-12 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+          <p className="text-slate-500">{t('crud.noResults')}</p>
+        </div>
+      ) : viewMode === 'cards' ? (
+        <div className={viewContainerClass(viewMode)}>
+          {filteredCommandes.map((commande) => (
+            <RecordCard key={commande.id} className="flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-bold text-slate-900 dark:text-slate-100">{commande.numero_commande}</h3>
+                <Badge className={getStatutBadge(commande.statut).color}>{getStatutBadge(commande.statut).label}</Badge>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <RecordField label={t('commande.fournisseur')} value={getFournisseurName(commande.fournisseur)} />
+                <RecordField label={t('commande.montant')} value={`${commande.montant_total} DT`} />
+                <RecordField label="Date" value={new Date(commande.date_commande).toLocaleDateString()} />
+              </div>
+              <div className="flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <Button variant="outline" size="sm" onClick={() => setSelectedDetail(commande)}>
+                  <Eye className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => handleEdit(commande)}>
+                  <Pencil className="h-4 w-4 mr-1" /> {t('crud.edit')}
+                </Button>
+                <Button variant="outline" size="sm" className="text-rose-600" onClick={() => handleDeleteClick(commande)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </RecordCard>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b bg-slate-50 dark:bg-slate-800/50">
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Numéro</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{t('commande.fournisseur')}</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{t('columns.statut')}</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{t('commande.montant')}</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Date</th>
+                <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-500">{t('crud.actions')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredCommandes.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <p>Aucune commande trouvée</p>
-          </div>
-        )}
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      {deleteModalState.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 mb-4">
-                <AlertTriangle className="h-8 w-8 text-rose-600" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Confirmer la suppression</h3>
-              <p className="text-slate-500 mb-6">
-                Êtes-vous sûr de vouloir supprimer la commande <strong className="text-slate-800">{deleteModalState.row?.numero_commande}</strong> ? Cette action est irréversible.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
-                  Annuler
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
-                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
-                </Button>
-              </div>
-            </div>
-          </div>
+            </thead>
+            <tbody>
+              {filteredCommandes.map((commande) => (
+                <tr key={commande.id} className="border-b hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                  <td className="px-4 py-3 text-sm font-medium">{commande.numero_commande}</td>
+                  <td className="px-4 py-3 text-sm">{getFournisseurName(commande.fournisseur)}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <Badge className={getStatutBadge(commande.statut).color}>{getStatutBadge(commande.statut).label}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{commande.montant_total} DT</td>
+                  <td className="px-4 py-3 text-sm">{new Date(commande.date_commande).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex justify-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedDetail(commande)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(commande)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(commande)}>
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+
+      <ConfirmModal
+        open={deleteModalState.isOpen}
+        onClose={() => setDeleteModalState({ isOpen: false, row: null })}
+        onConfirm={confirmDelete}
+        title={t('commande.deleteConfirm')}
+        message={t('common.confirmDeleteMsg', { name: deleteModalState.row?.numero_commande })}
+        loading={deletingId === deleteModalState.row?.id}
+      />
     </div>
   )
 }

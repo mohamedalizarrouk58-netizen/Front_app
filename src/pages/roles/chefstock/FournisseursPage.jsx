@@ -1,22 +1,30 @@
-import { ArrowLeft, Plus, Search, Pencil, Trash2, X, RefreshCw, AlertCircle, AlertTriangle } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { ArrowLeft, Plus, Pencil, Trash2, RefreshCw, AlertCircle } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
+import { AppModal } from '../../../components/ui/AppModal'
+import { ConfirmModal } from '../../../components/ui/ConfirmModal'
+import { DataFiltersBar } from '../../../components/ui/DataFiltersBar'
+import { RecordCard, RecordField } from '../../../components/ui/RecordCard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Input } from '../../../components/ui/input'
+import { useOperationFeedback } from '../../../context/OperationFeedbackContext'
+import { useViewMode, viewContainerClass } from '../../../hooks/useViewMode'
 import { extractApiErrorMessage } from '../../../lib/api'
 import { entityServices } from '../../../services/entities'
 
 function FournisseursPage() {
   const { t } = useTranslation()
+  const { runWithFeedback } = useOperationFeedback()
   const navigate = useNavigate()
   const [fournisseurs, setFournisseurs] = useState([])
-  const [filteredFournisseurs, setFilteredFournisseurs] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterActif, setFilterActif] = useState('all')
+  const [viewMode, setViewMode] = useViewMode('chefstock-fournisseurs')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [deleteModalState, setDeleteModalState] = useState({ isOpen: false, row: null })
@@ -37,9 +45,8 @@ function FournisseursPage() {
     setLoading(true)
     setError('')
     try {
-      const data = await entityServices.fournisseurs.list()
+      const data = await entityServices.fournisseurs.listAll()
       setFournisseurs(data)
-      setFilteredFournisseurs(data)
     } catch (err) {
       setError(extractApiErrorMessage(err, 'Erreur lors du chargement'))
     } finally {
@@ -51,14 +58,22 @@ function FournisseursPage() {
     loadFournisseurs()
   }, [loadFournisseurs])
 
-  useEffect(() => {
-    const filtered = fournisseurs.filter(f =>
-      f.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (f.email && f.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (f.telephone && f.telephone.includes(searchTerm))
+  const filteredFournisseurs = useMemo(() => {
+    let result = fournisseurs
+    if (filterActif === 'active') result = result.filter((f) => f.est_actif)
+    if (filterActif === 'inactive') result = result.filter((f) => !f.est_actif)
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return result
+    return result.filter(
+      (f) =>
+        f.nom.toLowerCase().includes(q) ||
+        (f.email && f.email.toLowerCase().includes(q)) ||
+        (f.telephone && f.telephone.includes(q)) ||
+        (f.ville && f.ville.toLowerCase().includes(q)),
     )
-    setFilteredFournisseurs(filtered)
-  }, [searchTerm, fournisseurs])
+  }, [fournisseurs, searchTerm, filterActif])
+
+  const hasActiveFilters = filterActif !== 'all' || searchTerm.trim().length > 0
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -74,12 +89,20 @@ function FournisseursPage() {
     setError('')
 
     try {
-      if (editingId) {
-        await entityServices.fournisseurs.update(editingId, formData)
-      } else {
-        await entityServices.fournisseurs.create(formData)
-      }
-      loadFournisseurs()
+      await runWithFeedback(
+        async () => {
+          if (editingId) {
+            await entityServices.fournisseurs.update(editingId, formData)
+          } else {
+            await entityServices.fournisseurs.create(formData)
+          }
+          await loadFournisseurs()
+        },
+        {
+          action: editingId ? 'update' : 'create',
+          entity: t('achat.fournisseurs'),
+        },
+      )
       resetForm()
       setShowForm(false)
     } catch (err) {
@@ -104,8 +127,13 @@ function FournisseursPage() {
     setDeletingId(deleteModalState.row.id)
     setError('')
     try {
-      await entityServices.fournisseurs.delete(deleteModalState.row.id)
-      loadFournisseurs()
+      await runWithFeedback(
+        async () => {
+          await entityServices.fournisseurs.delete(deleteModalState.row.id)
+          await loadFournisseurs()
+        },
+        { action: 'delete', entity: deleteModalState.row.nom },
+      )
       setDeleteModalState({ isOpen: false, row: null })
     } catch (err) {
       setError(extractApiErrorMessage(err, 'Erreur lors de la suppression'))
@@ -144,8 +172,8 @@ function FournisseursPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Fournisseurs</h1>
-            <p className="text-gray-500 mt-1">Gérez les fournisseurs de pièces détachées</p>
+            <h1 className="text-3xl font-bold tracking-tight dark:text-slate-100">{t('achat.fournisseurs')}</h1>
+            <p className="text-gray-500 dark:text-slate-400 mt-1">{t('achat.fournisseursDesc')}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -180,38 +208,55 @@ function FournisseursPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="flex gap-2">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Rechercher par nom, email ou téléphone..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
+      <DataFiltersBar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder={t('fournisseur.searchPlaceholder')}
+        shown={filteredFournisseurs.length}
+        total={fournisseurs.length}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={() => {
+          setSearchTerm('')
+          setFilterActif('all')
+        }}
+        filters={[
+          {
+            id: 'actif',
+            label: t('columns.statut'),
+            value: filterActif,
+            onChange: setFilterActif,
+            options: [
+              { value: 'all', label: t('common.all') },
+              { value: 'active', label: t('common.activeOnly') },
+              { value: 'inactive', label: t('common.inactiveOnly') },
+            ],
+          },
+        ]}
+      />
 
-      {/* Form */}
-      {showForm && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div>
-              <CardTitle>{editingId ? 'Modifier' : 'Nouveau'} Fournisseur</CardTitle>
-            </div>
-            <button
-              onClick={() => {
-                resetForm()
-                setShowForm(false)
-              }}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+      <AppModal
+        open={showForm}
+        onClose={() => {
+          resetForm()
+          setShowForm(false)
+        }}
+        eyebrow={editingId ? t('crud.edit') : t('crud.create')}
+        title={editingId ? t('fournisseur.editTitle') : t('fournisseur.createTitle')}
+        size="lg"
+        footer={
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => { resetForm(); setShowForm(false) }}>
+              {t('crud.cancel')}
+            </Button>
+            <Button type="submit" form="fournisseur-form" disabled={loading} className="bg-sky-600 hover:bg-sky-700">
+              {editingId ? t('crud.edit') : t('crud.create')}
+            </Button>
+          </div>
+        }
+      >
+            <form id="fournisseur-form" onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Nom *</label>
@@ -234,7 +279,7 @@ function FournisseursPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Téléphone</label>
+                  <label className="block text-sm font-medium mb-1">{t('fournisseur.telephone')}</label>
                   <Input
                     name="telephone"
                     value={formData.telephone}
@@ -243,7 +288,7 @@ function FournisseursPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Contact principal</label>
+                  <label className="block text-sm font-medium mb-1">{t('fournisseur.contact')}</label>
                   <Input
                     name="contact_principal"
                     value={formData.contact_principal}
@@ -252,7 +297,7 @@ function FournisseursPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Adresse</label>
+                  <label className="block text-sm font-medium mb-1">{t('fournisseur.adresse')}</label>
                   <Input
                     name="adresse"
                     value={formData.adresse}
@@ -270,7 +315,7 @@ function FournisseursPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Code postal</label>
+                  <label className="block text-sm font-medium mb-1">{t('fournisseur.codePostal')}</label>
                   <Input
                     name="code_postal"
                     value={formData.code_postal}
@@ -303,106 +348,92 @@ function FournisseursPage() {
                 </label>
               </div>
 
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" disabled={loading}>
-                  {editingId ? 'Modifier' : 'Créer'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    resetForm()
-                    setShowForm(false)
-                  }}
-                >
-                  Annuler
-                </Button>
-              </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
+      </AppModal>
 
-      {/* List */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="px-4 py-3 text-left text-sm font-semibold">Nom</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Email</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Téléphone</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Ville</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Contact</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Statut</th>
-              <th className="px-4 py-3 text-center text-sm font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredFournisseurs.map((fournisseur) => (
-              <tr key={fournisseur.id} className="border-b hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm font-medium">{fournisseur.nom}</td>
-                <td className="px-4 py-3 text-sm">{fournisseur.email || '-'}</td>
-                <td className="px-4 py-3 text-sm">{fournisseur.telephone || '-'}</td>
-                <td className="px-4 py-3 text-sm">{fournisseur.ville || '-'}</td>
-                <td className="px-4 py-3 text-sm">{fournisseur.contact_principal || '-'}</td>
-                <td className="px-4 py-3 text-sm">
-                  <Badge variant={fournisseur.est_actif ? 'default' : 'secondary'}>
-                    {fournisseur.est_actif ? 'Actif' : 'Inactif'}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <div className="flex justify-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(fournisseur)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteClick(fournisseur)}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
-                  </div>
-                </td>
+      {filteredFournisseurs.length === 0 ? (
+        <div className="text-center py-12 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+          <p className="text-slate-500">{t('crud.noResults')}</p>
+        </div>
+      ) : viewMode === 'cards' ? (
+        <div className={viewContainerClass(viewMode)}>
+          {filteredFournisseurs.map((fournisseur) => (
+            <RecordCard key={fournisseur.id} className="flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-bold text-slate-900 dark:text-slate-100">{fournisseur.nom}</h3>
+                <Badge variant={fournisseur.est_actif ? 'default' : 'secondary'}>
+                  {fournisseur.est_actif ? t('common.active') : t('common.inactive')}
+                </Badge>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <RecordField label={t('users.email')} value={fournisseur.email} />
+                <RecordField label={t('fournisseur.telephone')} value={fournisseur.telephone} />
+                <RecordField label="Ville" value={fournisseur.ville} />
+                <RecordField label={t('fournisseur.contact')} value={fournisseur.contact_principal} />
+              </div>
+              <div className="flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => handleEdit(fournisseur)}>
+                  <Pencil className="h-4 w-4 mr-1" /> {t('crud.edit')}
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 text-rose-600" onClick={() => handleDeleteClick(fournisseur)}>
+                  <Trash2 className="h-4 w-4 mr-1" /> {t('crud.delete')}
+                </Button>
+              </div>
+            </RecordCard>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b bg-slate-50 dark:bg-slate-800/50">
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Nom</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{t('users.email')}</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{t('fournisseur.telephone')}</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Ville</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{t('fournisseur.contact')}</th>
+                <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500">{t('columns.statut')}</th>
+                <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-500">{t('crud.actions')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredFournisseurs.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <p>Aucun fournisseur trouvé</p>
-          </div>
-        )}
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      {deleteModalState.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 mb-4">
-                <AlertTriangle className="h-8 w-8 text-rose-600" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Confirmer la suppression</h3>
-              <p className="text-slate-500 mb-6">
-                Êtes-vous sûr de vouloir supprimer le fournisseur <strong className="text-slate-800">{deleteModalState.row?.nom}</strong> ? Cette action est irréversible.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <Button variant="outline" className="flex-1" onClick={() => setDeleteModalState({ isOpen: false, row: null })}>
-                  Annuler
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={confirmDelete} disabled={deletingId === deleteModalState.row?.id}>
-                  {deletingId === deleteModalState.row?.id ? 'Suppression...' : 'Supprimer'}
-                </Button>
-              </div>
-            </div>
-          </div>
+            </thead>
+            <tbody>
+              {filteredFournisseurs.map((fournisseur) => (
+                <tr key={fournisseur.id} className="border-b hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                  <td className="px-4 py-3 text-sm font-medium">{fournisseur.nom}</td>
+                  <td className="px-4 py-3 text-sm">{fournisseur.email || '-'}</td>
+                  <td className="px-4 py-3 text-sm">{fournisseur.telephone || '-'}</td>
+                  <td className="px-4 py-3 text-sm">{fournisseur.ville || '-'}</td>
+                  <td className="px-4 py-3 text-sm">{fournisseur.contact_principal || '-'}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <Badge variant={fournisseur.est_actif ? 'default' : 'secondary'}>
+                      {fournisseur.est_actif ? 'Actif' : 'Inactif'}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex justify-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(fournisseur)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(fournisseur)}>
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+
+      <ConfirmModal
+        open={deleteModalState.isOpen}
+        onClose={() => setDeleteModalState({ isOpen: false, row: null })}
+        onConfirm={confirmDelete}
+        title={t('fournisseur.deleteConfirm')}
+        message={t('common.confirmDeleteMsg', { name: deleteModalState.row?.nom })}
+        loading={deletingId === deleteModalState.row?.id}
+      />
     </div>
   )
 }

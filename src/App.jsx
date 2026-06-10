@@ -4,10 +4,12 @@ import LoginPage from './pages/LoginPage'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminOverviewPage from './pages/admin/AdminOverviewPage'
 import EntityCrudPage from './pages/admin/EntityCrudPage'
+import UsersPage from './pages/admin/UsersPage'
 import RoleLayout from './pages/roles/RoleLayout'
 import RoleModulePage from './pages/roles/RoleModulePage'
 import RoleOverviewPage from './pages/roles/RoleOverviewPage'
 import MessagesPage from './pages/shared/MessagesPage'
+import ProfilePage from './pages/shared/ProfilePage'
 import {
   ChefStockOverviewPage,
   AchatPiecePage,
@@ -27,6 +29,7 @@ import {
 
 import FournisseurLayout from './pages/roles/fournisseur/FournisseurLayout'
 import FournisseurDashboardPage from './pages/roles/fournisseur/FournisseurDashboardPage'
+import { MessagesProvider } from './context/MessagesContext'
 
 function ProtectedRoute({ children, allowedRole }) {
   const auth = getStoredAuth()
@@ -41,7 +44,7 @@ function ProtectedRoute({ children, allowedRole }) {
     return <Navigate to={getRouteForRole(normalizedUserRole)} replace />
   }
 
-  return children
+  return <MessagesProvider>{children}</MessagesProvider>
 }
 
 function HomeRoute() {
@@ -80,26 +83,17 @@ function App() {
       >
         <Route index element={<AdminOverviewPage />} />
         <Route path="achat-piece" element={<AchatPiecePage rolePath="admin" />} />
-        <Route path="messages" element={<MessagesPage />} />
-        <Route path="entities/:entityKey" element={<EntityCrudPage />} />
-      </Route>
-
-      <Route
-        path={ROLE_ROUTES.administrateur}
-        element={
-          <ProtectedRoute allowedRole="administrateur">
-            <RoleLayout role="administrateur" />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<RoleOverviewPage />} />
-        <Route path="achat-piece" element={<AchatPiecePage rolePath="administrateur" />} />
         <Route path="fournisseurs" element={<FournisseursPage />} />
         <Route path="commandes" element={<CommandesPiecesPage />} />
         <Route path="prix" element={<PrixFournisseursPage />} />
+        <Route path="suivi-achat" element={<DemandesPiecesAchatPage />} />
         <Route path="messages" element={<MessagesPage />} />
-        <Route path="modules/:moduleKey" element={<RoleModulePage />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="entities/users" element={<UsersPage />} />
+        <Route path="entities/:entityKey" element={<EntityCrudPage />} />
       </Route>
+
+      <Route path="/administrateur/*" element={<Navigate to="/admin" replace />} />
 
       <Route
         path={ROLE_ROUTES.manager}
@@ -111,6 +105,7 @@ function App() {
       >
         <Route index element={<RoleOverviewPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="modules/:moduleKey" element={<RoleModulePage />} />
       </Route>
 
@@ -124,6 +119,7 @@ function App() {
       >
         <Route index element={<RoleOverviewPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="modules/:moduleKey" element={<RoleModulePage />} />
       </Route>
 
@@ -139,6 +135,7 @@ function App() {
         <Route path="achat-piece" element={<AchatPiecePage />} />
         <Route path="suivi-achat" element={<DemandesPiecesAchatPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="modules/:moduleKey" element={<RoleModulePage />} />
         <Route path="fournisseurs" element={<FournisseursPage />} />
         <Route path="commandes" element={<CommandesPiecesPage />} />
@@ -155,6 +152,7 @@ function App() {
       >
         <Route index element={<RoleOverviewPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="modules/:moduleKey" element={<RoleModulePage />} />
       </Route>
 
@@ -168,6 +166,7 @@ function App() {
       >
         <Route index element={<FournisseurDashboardPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="profile" element={<ProfilePage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

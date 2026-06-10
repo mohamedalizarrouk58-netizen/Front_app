@@ -50,10 +50,10 @@ export function displayValue(value) {
   }
 
   if (typeof value === 'string') {
-    if (value === 'refuse') return 'Non résolu'
-    if (value === 'termine') return 'Terminé'
-    if (value === 'en_cours') return 'En cours'
-    if (value === 'en_attente') return 'En attente'
+    const statusKey = `status.${value}`
+    if (i18n.exists(statusKey)) return i18n.t(statusKey)
+    const prioriteKey = `priorite.${value}`
+    if (i18n.exists(prioriteKey)) return i18n.t(prioriteKey)
 
     const isoDateTimeRegex = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/;
     const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;

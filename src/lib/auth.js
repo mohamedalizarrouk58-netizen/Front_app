@@ -4,7 +4,7 @@ import { api, extractApiErrorMessage } from './api'
 const AUTH_STORAGE_KEY = 'gestionmt_auth'
 
 export const ROLE_ROUTES = {
-  administrateur: '/administrateur',
+  administrateur: '/admin',
   admin: '/admin',
   manager: '/manager',
   technicien: '/technicien',
@@ -14,7 +14,7 @@ export const ROLE_ROUTES = {
 }
 
 const ROLE_ALIAS = {
-  administrateur: 'administrateur',
+  administrateur: 'admin',
   admin: 'admin',
   administrator: 'admin',
   manager: 'manager',
@@ -141,11 +141,7 @@ function inferRoleFromUsername(username) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
 
-  if (compact.includes('administrateur')) {
-    return 'administrateur'
-  }
-
-  if (compact.includes('admin')) {
+  if (compact.includes('administrateur') || compact.includes('admin')) {
     return 'admin'
   }
 
@@ -256,6 +252,14 @@ export function clearAuth() {
 export function getRouteForRole(role) {
   const normalizedRole = normalizeRole(role)
   return ROLE_ROUTES[normalizedRole] ?? '/login'
+}
+
+export function getProfilePath(role) {
+  const base = getRouteForRole(role)
+  if (!base || base === '/login') {
+    return '/login'
+  }
+  return `${base.replace(/\/$/, '')}/profile`
 }
 
 export function isAuthValid(auth) {

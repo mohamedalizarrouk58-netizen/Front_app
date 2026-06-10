@@ -1,7 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
+/* Class-based dark mode (replaces Tailwind v3 darkMode: 'class' in tailwind.config.js) */
+@custom-variant dark (&:where(.dark, .dark *));
 
+:root {
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'Manrope', system-ui, sans-serif;
+  --color-bg: #f8fafc;
+  --color-fg: #334155;
+  --color-surface: rgba(255, 255, 255, 0.85);
+  --color-border: rgba(148, 163, 184, 0.25);
+  --color-accent: #1ea0d6;
+  --color-accent-dark: #145f7a;
+}
+
+html.dark {
+  --color-bg: #0f172a;
+  --color-fg: #f1f5f9;
+  --color-surface: rgba(30, 41, 59, 0.75);
+  --color-border: rgba(255, 255, 255, 0.08);
+}
 
 * {
   box-sizing: border-box;
@@ -10,9 +29,13 @@
 body {
   margin: 0;
   font-family: var(--font-body);
-  color: #334155;
-  background: #f8fafc;
+  color: var(--color-fg);
+  background: var(--color-bg);
   transition: background 0.3s ease, color 0.3s ease;
+}
+
+html[dir='rtl'] body {
+  font-family: 'Segoe UI', Tahoma, 'Manrope', sans-serif;
 }
 
 html.dark body {
@@ -165,6 +188,82 @@ html.dark .compact-sidebar-pill {
 
 .delay-3 {
   animation-delay: 0.24s;
+}
+
+@keyframes auth-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0);
+  }
+}
+
+.auth-orb {
+  animation: auth-float 9s ease-in-out infinite;
+}
+
+.auth-orb:nth-child(2) {
+  animation-duration: 11s;
+  animation-delay: -2s;
+}
+
+.auth-orb:nth-child(3) {
+  animation-duration: 13s;
+  animation-delay: -4s;
+}
+
+@keyframes auth-shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+.auth-progress-bar {
+  background-size: 200% auto;
+  animation: auth-shimmer 2.2s linear infinite;
+}
+
+@keyframes auth-gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.auth-gradient-text {
+  background: linear-gradient(120deg, #1ea0d6, #6366f1, #1ea0d6);
+  background-size: 200% auto;
+  animation: auth-gradient-shift 6s ease infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.login-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 160, 214, 0.45),
+    rgba(99, 102, 241, 0.25),
+    rgba(30, 160, 214, 0.35)
+  );
+  opacity: 0.55;
+  filter: blur(14px);
+  animation: auth-gradient-shift 8s ease infinite;
+}
+
+html.dark .login-card-glow::before {
+  opacity: 0.35;
 }
 
 /* Grid Layout for Aligned Tables */

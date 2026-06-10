@@ -1,24 +1,63 @@
 import { api } from '../../lib/api'
 
-function normalizeListPayload(payload) {
+export const DEFAULT_PAGE_SIZE = 25
+
+export function parseListResponse(payload) {
   if (Array.isArray(payload)) {
-    return payload
+    return {
+      items: payload,
+      count: payload.length,
+      next: null,
+      previous: null,
+    }
   }
 
-  if (Array.isArray(payload?.results)) {
-    return payload.results
-  }
+  const items = Array.isArray(payload?.results) ? payload.results : []
 
-  return []
+  return {
+    items,
+    count: Number(payload?.count ?? items.length),
+    next: payload?.next ?? null,
+    previous: payload?.previous ?? null,
+  }
+}
+
+/** @deprecated Use list() which returns { items, count } or listAll() for full datasets. */
+export function normalizeListPayload(payload) {
+  return parseListResponse(payload).items
 }
 
 export function createCrudService(endpoint) {
   return {
     endpoint,
 
-    async list(params) {
+    async list(params = {}) {
       const response = await api.get(endpoint, { params })
-      return normalizeListPayload(response.data)
+      return parseListResponse(response.data)
+    },
+
+    async listAll(params = {}, options = {}) {
+      const pageSize = options.pageSize ?? 100
+      const maxPages = options.maxPages ?? 50
+      let page = 1
+      let allItems = []
+      let total = 0
+
+      while (page <= maxPages) {
+        const { items, count, next } = await this.list({
+          ...params,
+          page,
+          page_size: pageSize,
+        })
+        total = count || allItems.length + items.length
+        allItems = allItems.concat(items)
+        if (!next || items.length === 0) {
+          break
+        }
+        page += 1
+      }
+
+      return allItems
     },
 
     async retrieve(id) {
