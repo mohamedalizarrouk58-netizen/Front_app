@@ -47,7 +47,6 @@ import {
 } from '../../lib/adminEntities'
 import { tEntity, tModule } from '../../lib/i18nLabels'
 import { entityServices } from '../../services/entities'
-import { parseListResponse } from '../../services/entities/crudService'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -74,14 +73,24 @@ function adminModulePath(key) {
   return adminEntityPath(key)
 }
 
-function listItemsFromSettled(result) {
-  if (result?.status !== 'fulfilled') return []
-  return parseListResponse(result.value).items
-}
+async function fetchEntityDataset(service) {
+  if (!service?.list) {
+    return { items: [], count: 0 }
+  }
 
-function getCountFromSettled(result) {
-  if (result?.status !== 'fulfilled') return 0
-  return parseListResponse(result.value).count
+  try {
+    const firstPage = await service.list({ page: 1, page_size: 100 })
+    const total = Number(firstPage.count ?? firstPage.items?.length ?? 0)
+    let items = firstPage.items ?? []
+
+    if (firstPage.next && items.length < total && service.listAll) {
+      items = await service.listAll()
+    }
+
+    return { items, count: total || items.length }
+  } catch {
+    return { items: [], count: 0 }
+  }
 }
 
 function formatTnd(value) {
@@ -120,29 +129,29 @@ function AdminOverviewPage() {
     setError(null)
 
     try {
-      const [usersRes, demandesRes, interventionsRes, fichesRes, facturesRes] =
-        await Promise.allSettled([
-          entityServices.users.list(),
-          entityServices['demande-maintenances'].list(),
-          entityServices.interventions.list(),
-          entityServices['fiche-reparations'].list(),
-          entityServices.factures.list(),
+      const [usersData, demandesData, interventionsData, fichesData, facturesData] =
+        await Promise.all([
+          fetchEntityDataset(entityServices.users),
+          fetchEntityDataset(entityServices['demande-maintenances']),
+          fetchEntityDataset(entityServices.interventions),
+          fetchEntityDataset(entityServices['fiche-reparations']),
+          fetchEntityDataset(entityServices.factures),
         ])
 
-      const mDemandes = listItemsFromSettled(demandesRes)
-      const mInterventions = listItemsFromSettled(interventionsRes)
-      const mFactures = listItemsFromSettled(facturesRes)
+      const mDemandes = demandesData.items
+      const mInterventions = interventionsData.items
+      const mFactures = facturesData.items
 
       const revenue = mFactures.reduce((sum, f) => sum + (Number(f.montant_total) || 0), 0)
       const paidInvoices = mFactures.filter((f) => f.est_payee === true || f.est_payee === 'true').length
       const unpaidInvoices = mFactures.length - paidInvoices
 
       setAnalytics({
-        users: getCountFromSettled(usersRes),
-        demandes: getCountFromSettled(demandesRes),
-        interventions: getCountFromSettled(interventionsRes),
-        fiches: getCountFromSettled(fichesRes),
-        factures: getCountFromSettled(facturesRes),
+        users: usersData.count,
+        demandes: demandesData.count,
+        interventions: interventionsData.count,
+        fiches: fichesData.count,
+        factures: facturesData.count,
         revenue,
         paidInvoices,
         unpaidInvoices,
@@ -203,13 +212,8 @@ function AdminOverviewPage() {
       const moduleResults = await Promise.all(
         ADMIN_DASHBOARD_ENDPOINTS.map(async (endpoint) => {
           const service = entityServices[endpoint.serviceKey]
-          if (!service?.list) return { key: endpoint.key, count: 0 }
-          try {
-            const result = await service.list({ page: 1, page_size: 1 })
-            return { key: endpoint.key, count: result.count ?? result.items?.length ?? 0 }
-          } catch {
-            return { key: endpoint.key, count: 0 }
-          }
+          const data = await fetchEntityDataset(service)
+          return { key: endpoint.key, count: data.count }
         }),
       )
 

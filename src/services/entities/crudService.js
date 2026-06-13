@@ -12,6 +12,16 @@ export function parseListResponse(payload) {
     }
   }
 
+  // Already normalized by createCrudService.list()
+  if (payload && Array.isArray(payload.items)) {
+    return {
+      items: payload.items,
+      count: Number(payload.count ?? payload.items.length),
+      next: payload.next ?? null,
+      previous: payload.previous ?? null,
+    }
+  }
+
   const items = Array.isArray(payload?.results) ? payload.results : []
 
   return {
