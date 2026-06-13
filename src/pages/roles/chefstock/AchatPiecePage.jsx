@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { extractApiErrorMessage } from '../../../lib/api'
 import { entityServices } from '../../../services/entities'
+import { extractListItems } from '../../../services/entities/crudService'
 
 function AchatPiecePage({ rolePath = 'chefstock' }) {
   const { t } = useTranslation()
@@ -29,21 +30,25 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
     setError('')
 
     try {
-    const [fournisseurs, commandes, demandesPieces] = await Promise.all([
-        entityServices.fournisseurs?.list?.() ?? [],
-        entityServices['commandes-pieces']?.list?.() ?? [],
-        entityServices['demande-pieces']?.list?.() ?? [],
+    const [fournisseursRes, demandesRes] = await Promise.all([
+        entityServices.fournisseurs?.list?.() ?? { items: [] },
+        entityServices['demande-pieces']?.list?.() ?? { items: [] },
       ])
 
-      const piecesHorsStock = demandesPieces.filter(d => 
-        ['hors_stock', 'en_attente_fournisseur', 'acceptee_fournisseur', 'refusee_fournisseur'].includes(d.statut)
+      const fournisseurs = extractListItems(fournisseursRes)
+      const demandesPieces = extractListItems(demandesRes)
+
+      const piecesHorsStock = demandesPieces.filter((d) =>
+        ['hors_stock', 'en_attente_fournisseur', 'acceptee_fournisseur', 'refusee_fournisseur'].includes(
+          d.statut,
+        ),
       )
-      
-      const facturesCount = demandesPieces.filter(d => d.statut === 'livree').length
+
+      const facturesCount = demandesPieces.filter((d) => d.statut === 'livree').length
 
       setCounts({
-        fournisseurs: Array.isArray(fournisseurs) ? fournisseurs.length : 0,
-        commandes: piecesHorsStock.length, // tracking en cours
+        fournisseurs: fournisseurs.length,
+        commandes: piecesHorsStock.length,
         prix: facturesCount,
       })
     } catch (requestError) {

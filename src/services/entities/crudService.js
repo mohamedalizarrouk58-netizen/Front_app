@@ -37,6 +37,30 @@ export function normalizeListPayload(payload) {
   return parseListResponse(payload).items
 }
 
+export function extractListItems(payload) {
+  return parseListResponse(payload).items
+}
+
+export async function fetchEntityDataset(service) {
+  if (!service?.list) {
+    return { items: [], count: 0 }
+  }
+
+  try {
+    const firstPage = await service.list({ page: 1, page_size: 100 })
+    const total = Number(firstPage.count ?? firstPage.items?.length ?? 0)
+    let items = firstPage.items ?? []
+
+    if (firstPage.next && items.length < total && service.listAll) {
+      items = await service.listAll()
+    }
+
+    return { items, count: total || items.length }
+  } catch {
+    return { items: [], count: 0 }
+  }
+}
+
 export function createCrudService(endpoint) {
   return {
     endpoint,
