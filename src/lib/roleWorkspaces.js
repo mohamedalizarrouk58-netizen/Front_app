@@ -259,7 +259,7 @@ export const ROLE_WORKSPACES = {
         label: 'Paiements',
         serviceKey: 'factures',
         icon: ReceiptText,
-        columns: ['id', 'intervention', 'client', 'montant_total', 'date_facture', 'est_payee'],
+        columns: ['id', 'client', 'montant_total', 'date_facture', 'est_payee'],
         permissions: { create: false, update: true, delete: true },
         editableFields: ['intervention', 'client', 'montant_total', 'date_facture', 'est_payee'],
       },

@@ -1721,6 +1721,142 @@ function RoleModulePage() {
              </div>
           )}
         </div>
+      ) : role === 'receptioniste' && moduleConfig?.key === 'factures' ? (
+        <div className="animate-rise delay-1 space-y-3">
+          {error ? (
+            <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/60">
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {t('module.invoiceNo')}
+                    </th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {tModule('clients')}
+                    </th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">
+                      {t('columns.montant_total')}
+                    </th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {t('columns.date_facture')}
+                    </th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">
+                      {t('module.payment')}
+                    </th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">
+                      {t('crud.actions')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredRows.map((row) => {
+                    const isPaid = row.est_payee === true || row.est_payee === 'true'
+                    const clientLabel =
+                      row.client_nom ||
+                      (typeof row.client === 'object'
+                        ? row.client?.nom_complet || row.client?.email || `Client #${row.client?.id}`
+                        : getResolvedColumnValue('client', row.client))
+
+                    return (
+                      <tr
+                        key={row.id}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-slate-100">
+                          #{row.id}
+                        </td>
+                        <td className="px-4 py-3.5 text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[200px] truncate">
+                          {clientLabel || '—'}
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <span className="font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg border border-emerald-100 dark:border-emerald-800/40 text-sm">
+                            {new Intl.NumberFormat('fr-TN', {
+                              style: 'currency',
+                              currency: 'TND',
+                              maximumFractionDigits: 3,
+                            }).format(Number(row.montant_total) || 0)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-400">
+                          {row.date_facture
+                            ? new Date(row.date_facture).toLocaleDateString()
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <Badge
+                            variant="outline"
+                            className={
+                              isPaid
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300'
+                            }
+                          >
+                            {isPaid ? t('common.paid') : t('common.unpaid')}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2 text-[#145f7a] hover:bg-[#145f7a]/10"
+                              onClick={() => printFacture(row)}
+                            >
+                              <Printer className="h-3.5 w-3.5 mr-1" />
+                              {t('module.print')}
+                            </Button>
+                            {!isPaid ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20"
+                                onClick={() => markFacturePaid(row)}
+                              >
+                                {t('module.markPaid')}
+                              </Button>
+                            ) : null}
+                            {permissions.update && hasWritableFields ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-[#145f7a] hover:bg-sky-50"
+                                onClick={() => openEdit(row)}
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-1" />
+                                {t('crud.edit')}
+                              </Button>
+                            ) : null}
+                            {canDeleteRow ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-rose-600 hover:bg-rose-50"
+                                onClick={() => setDeleteModalState({ isOpen: true, row })}
+                                disabled={deletingId === row.id}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                {t('crud.delete')}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!loading && filteredRows.length === 0 ? (
+              <div className="py-12 text-center text-sm text-slate-400">{t('common.noRecords')}</div>
+            ) : null}
+          </div>
+        </div>
       ) : isMessagesModule ? (
         <MessengerApp embedded onWsStateChange={setWsState} />
       ) : (

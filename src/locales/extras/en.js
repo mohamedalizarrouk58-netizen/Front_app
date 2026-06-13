@@ -260,6 +260,7 @@ export default {
   'module.markInterventionNotResolved': 'Mark this intervention as not resolved?',
   'module.cancelPieceConfirm': 'Cancel this part request?',
   'module.print': 'Print',
+  'module.invoiceNo': 'Invoice #',
   'module.diagnosticSolutionRequired': 'Diagnostic and proposed solution are required.',
   'module.markPaid': 'Mark as paid',
   'module.sendInvoiceClient': 'Send invoice to client',

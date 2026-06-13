@@ -260,6 +260,7 @@ export default {
   'module.markInterventionNotResolved': 'Voulez-vous vraiment marquer cette intervention comme non résolue ?',
   'module.cancelPieceConfirm': 'Voulez-vous vraiment annuler cette demande de pièce ?',
   'module.print': 'Imprimer',
+  'module.invoiceNo': 'N° facture',
   'module.diagnosticSolutionRequired': 'Le diagnostic et la solution proposée sont obligatoires.',
   'module.markPaid': 'Marquer payée',
   'module.sendInvoiceClient': 'Envoyer facture au client',
