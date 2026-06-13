@@ -260,6 +260,7 @@ export default {
   'module.markInterventionNotResolved': 'تعليم هذا التدخل كغير محلول؟',
   'module.cancelPieceConfirm': 'إلغاء طلب القطعة؟',
   'module.print': 'طباعة',
+  'module.diagnosticSolutionRequired': 'التشخيص والحل المقترح مطلوبان.',
   'module.markPaid': 'تعليم كمدفوعة',
   'module.sendInvoiceClient': 'إرسال الفاتورة للعميل',
   'module.resendInvoice': 'إعادة إرسال الفاتورة',

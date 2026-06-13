@@ -130,7 +130,8 @@ export const ROLE_WORKSPACES = {
         icon: ReceiptText,
         columns: ['id', 'client', 'montant_total', 'est_payee', 'date_facture'],
         permissions: { create: true, update: false, delete: false },
-        editableFields: ['intervention', 'client', 'montant_total', 'date_facture'],
+        editableFields: ['intervention', 'client', 'date_facture'],
+        readOnlyFields: ['montant_total'],
       },
       {
         key: 'messages',
@@ -159,6 +160,7 @@ export const ROLE_WORKSPACES = {
         permissions: { create: false, update: true, delete: false },
         editableFields: ['demande', 'technicien', 'diagnostic', 'solution_proposee', 'date_debut', 'date_fin'],
         readOnlyFields: ['demande', 'technicien', 'date_debut', 'date_fin'],
+        requiredFields: ['diagnostic', 'solution_proposee'],
       },
       {
         key: 'messages',

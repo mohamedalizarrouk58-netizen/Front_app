@@ -106,6 +106,7 @@
   "dashboard.pendingDemandes": "Pending requests",
   "dashboard.realtime": "Real-time analytics",
   "dashboard.totalRecords": "Total records",
+  "dashboard.adminSubtitle": "Simplified activity overview.",
   "dashboard.activeModules": "Active modules",
   "dashboard.welcome": "Welcome to your dashboard",
   "dashboard.noData": "No data available.",

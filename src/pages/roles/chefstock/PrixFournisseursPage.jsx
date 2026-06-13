@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Pencil, Trash2, RefreshCw, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -114,17 +114,6 @@ function PrixFournisseursPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleEdit = (prixItem) => {
-    setFormData({
-      piece: prixItem.piece || '',
-      fournisseur: prixItem.fournisseur || '',
-      prix_propose_fournisseur: prixItem.prix_propose_fournisseur || '',
-      quantite: prixItem.quantite || 1,
-    })
-    setEditingId(prixItem.id)
-    setShowForm(true)
   }
 
   const handleDeleteClick = (prixItem) => {
@@ -480,9 +469,6 @@ function PrixFournisseursPage() {
                 <Button variant="outline" size="sm" className="flex-1 text-emerald-700" onClick={() => printFacture(prixItem)}>
                   Imprimer
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleEdit(prixItem)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
                 <Button variant="outline" size="sm" className="text-rose-600" onClick={() => handleDeleteClick(prixItem)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -522,9 +508,6 @@ function PrixFournisseursPage() {
                       <div className="flex justify-center gap-2">
                         <Button variant="outline" size="sm" className="gap-2 rounded-lg text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={() => printFacture(prixItem)}>
                           Imprimer
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#145f7a] hover:bg-sky-50 rounded-lg" onClick={() => handleEdit(prixItem)}>
-                          <Pencil className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg" onClick={() => handleDeleteClick(prixItem)}>
                           <Trash2 className="h-4 w-4" />

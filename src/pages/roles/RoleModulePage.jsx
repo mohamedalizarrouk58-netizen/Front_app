@@ -221,6 +221,18 @@ function RoleModulePage() {
     return { ...defaults, ...(moduleConfig?.permissions ?? {}) }
   }, [moduleConfig])
 
+  const canDeleteRow = useMemo(() => {
+    if (!permissions.delete) {
+      return false
+    }
+    const blockedByRole = {
+      receptioniste: ['clients', 'materiels', 'demande-maintenances', 'factures'],
+      manager: ['demande-maintenances', 'interventions', 'fiche-reparations', 'factures', 'messages'],
+    }
+    const blocked = blockedByRole[role] ?? []
+    return !blocked.includes(moduleConfig?.key)
+  }, [permissions.delete, role, moduleConfig?.key])
+
   const editableFields = useMemo(() => {
     if (!moduleEntity) {
       return []
@@ -238,6 +250,16 @@ function RoleModulePage() {
       fields = fields.map((field) => {
         if (readOnlySet.has(field.key)) {
           return { ...field, readOnly: true }
+        }
+        return field
+      })
+    }
+
+    if (moduleConfig?.requiredFields?.length) {
+      const requiredSet = new Set(moduleConfig.requiredFields)
+      fields = fields.map((field) => {
+        if (requiredSet.has(field.key)) {
+          return { ...field, required: true }
         }
         return field
       })
@@ -475,6 +497,10 @@ function RoleModulePage() {
     const lookupFields = moduleEntity.fields.filter((field) => field.type === 'lookup' && field.lookup)
     const uniqueServiceKeys = [...new Set(lookupFields.map((field) => field.lookup.serviceKey))]
 
+    if (role === 'manager' && moduleConfig?.key === 'factures') {
+      uniqueServiceKeys.push('fiche-reparations', 'demande-maintenances', 'materiels')
+    }
+
     if (uniqueServiceKeys.length === 0) {
       setLookupData({})
       return
@@ -503,7 +529,7 @@ function RoleModulePage() {
     }
 
     setLookupData(nextLookupMap)
-  }, [moduleEntity])
+  }, [moduleEntity, moduleConfig?.key, role])
 
   const loadRows = useCallback(async () => {
     if (!service) {
@@ -832,16 +858,83 @@ function RoleModulePage() {
     }
   }
 
+  const syncFactureAmountFromIntervention = useCallback(
+    async (interventionId) => {
+      if (!interventionId) {
+        return
+      }
+
+      let fiches = lookupData['fiche-reparations'] ?? []
+      if (!fiches.length && entityServices['fiche-reparations']) {
+        try {
+          fiches = await entityServices['fiche-reparations'].listAll()
+        } catch {
+          fiches = []
+        }
+      }
+
+      const fiche = fiches.find(
+        (item) =>
+          Number(item.intervention) === Number(interventionId) ||
+          Number(item.intervention?.id) === Number(interventionId),
+      )
+
+      if (!fiche) {
+        return
+      }
+
+      const total =
+        Number(fiche.cout_pieces || 0) +
+        Number(fiche.cout_main_oeuvre || 0) +
+        Number(fiche.frais_societe || 0) +
+        Number(fiche.prix_supplementaire || 0)
+
+      const interventions = lookupData.interventions ?? []
+      const intervention = interventions.find((item) => Number(item.id) === Number(interventionId))
+      let clientId = null
+
+      if (intervention?.demande) {
+        const demandeId =
+          typeof intervention.demande === 'object' ? intervention.demande.id : intervention.demande
+        const demandes = lookupData['demande-maintenances'] ?? []
+        const demande = demandes.find((item) => Number(item.id) === Number(demandeId))
+        const materielRef = demande?.materiel
+        const materielId =
+          typeof materielRef === 'object' ? materielRef?.id : materielRef
+        const materiels = lookupData.materiels ?? []
+        const materiel = materiels.find((item) => Number(item.id) === Number(materielId))
+        const clientRef = materiel?.client
+        clientId = typeof clientRef === 'object' ? clientRef?.id : clientRef
+      }
+
+      setFormData((previous) => ({
+        ...previous,
+        montant_total: total,
+        ...(clientId ? { client: clientId } : {}),
+      }))
+    },
+    [lookupData],
+  )
+
   const handleFieldChange = (fieldKey, value) => {
     setFormData((previous) => {
       const nextData = { ...previous, [fieldKey]: value }
-      
+
       if (role === 'manager' && moduleConfig?.key === 'fiche-reparations' && fieldKey === 'confirmation') {
         nextData.valide_manager = value
       }
-      
+
       return nextData
     })
+
+    if (
+      role === 'manager' &&
+      moduleConfig?.key === 'factures' &&
+      fieldKey === 'intervention' &&
+      value
+    ) {
+      void syncFactureAmountFromIntervention(value)
+    }
   }
 
   const buildPayload = () => {
@@ -965,6 +1058,15 @@ function RoleModulePage() {
       }
     }
 
+    if (role === 'technicien' && moduleConfig?.key === 'interventions') {
+      const diagnostic = String(formData.diagnostic ?? '').trim()
+      const solution = String(formData.solution_proposee ?? '').trim()
+      if (!diagnostic || !solution) {
+        setSaveError(t('module.diagnosticSolutionRequired'))
+        return
+      }
+    }
+
     setSaving(true)
     setSaveError('')
 
@@ -1069,7 +1171,7 @@ function RoleModulePage() {
 
   const confirmDelete = async () => {
     const rowId = deleteModalState.row?.id
-    if (!permissions.delete || !service || !rowId) {
+    if (!canDeleteRow || !service || !rowId) {
       return
     }
 
@@ -1672,7 +1774,7 @@ function RoleModulePage() {
                           ))}
                         </div>
 
-                        {(permissions.update || permissions.delete) && (
+                        {(permissions.update || canDeleteRow) && (
                           <div className="mt-3 flex shrink-0 items-center justify-end gap-2 sm:mt-0 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 self-end sm:self-auto sm:w-[200px]">
                             {permissions.update && hasWritableFields ? (
                               <Button size="sm" variant="ghost" className="h-8 px-2 text-[#145f7a] hover:bg-sky-50" onClick={() => openEdit(row)}>
@@ -1680,7 +1782,7 @@ function RoleModulePage() {
                               </Button>
                             ) : null}
 
-                            {permissions.delete ? (
+                            {canDeleteRow ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -1723,7 +1825,7 @@ function RoleModulePage() {
                       ))}
                     </div>
 
-                    {(permissions.update || permissions.delete || (role === 'receptioniste' && moduleConfig?.key === 'factures')) && (
+                    {(permissions.update || canDeleteRow || (role === 'receptioniste' && moduleConfig?.key === 'factures')) && (
                       <div className="flex items-center justify-end gap-2 sm:pl-4 sm:ml-4 sm:border-l sm:border-slate-100 shrink-0 self-end sm:self-auto mt-2 sm:mt-0 sm:w-[200px]">
                         {role === 'receptioniste' && moduleConfig?.key === 'factures' ? (
                           <>
@@ -1754,7 +1856,7 @@ function RoleModulePage() {
                           </Button>
                         ) : null}
 
-                        {permissions.delete ? (
+                        {canDeleteRow ? (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1952,7 +2054,7 @@ function RoleModulePage() {
                             className="min-h-24 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none ring-[#145f7a]/40 focus:ring-2"
                             value={value}
                             onChange={(event) => handleFieldChange(field.key, event.target.value)}
-                            required={field.required && drawerMode === 'create' && !isReadOnly}
+                            required={field.required && !isReadOnly}
                             disabled={isReadOnly}
                           />
                         </label>
@@ -1968,7 +2070,7 @@ function RoleModulePage() {
                             className="min-h-24 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 py-2 font-mono text-xs text-slate-900 dark:text-slate-100 outline-none ring-[#145f7a]/40 focus:ring-2"
                             value={value}
                             onChange={(event) => handleFieldChange(field.key, event.target.value)}
-                            required={field.required && drawerMode === 'create' && !isReadOnly}
+                            required={field.required && !isReadOnly}
                             disabled={isReadOnly}
                             placeholder={field.label.toLowerCase().includes('array') ? '[ ]' : '{ }'}
                           />
@@ -1985,7 +2087,7 @@ function RoleModulePage() {
                             className="h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none ring-[#145f7a]/40 focus:ring-2"
                             value={value}
                             onChange={(event) => handleFieldChange(field.key, event.target.value)}
-                            required={field.required && drawerMode === 'create' && !isReadOnly}
+                            required={field.required && !isReadOnly}
                             disabled={isReadOnly}
                           >
                             <option value="">Select...</option>
@@ -2035,7 +2137,7 @@ function RoleModulePage() {
                               className="h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none ring-[#145f7a]/40 focus:ring-2"
                               value={value}
                               onChange={(event) => handleFieldChange(field.key, event.target.value)}
-                              required={field.required && drawerMode === 'create' && !isReadOnly}
+                              required={field.required && !isReadOnly}
                               disabled={isReadOnly}
                             >
                               <option value="">Select...</option>
@@ -2082,7 +2184,7 @@ function RoleModulePage() {
                           className="h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none ring-[#145f7a]/40 focus:ring-2"
                           value={value}
                           onChange={(event) => handleFieldChange(field.key, event.target.value)}
-                          required={field.required && drawerMode === 'create' && !isReadOnly}
+                          required={field.required && !isReadOnly}
                           disabled={isReadOnly}
                         />
                       </label>

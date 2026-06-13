@@ -106,6 +106,7 @@
   "dashboard.pendingDemandes": "Demandes en attente",
   "dashboard.realtime": "Analytique en temps réel",
   "dashboard.totalRecords": "Total enregistrements",
+  "dashboard.adminSubtitle": "Vue d'ensemble simplifiée de l'activité.",
   "dashboard.activeModules": "Modules actifs",
   "dashboard.welcome": "Bienvenue sur votre tableau de bord",
   "dashboard.noData": "Aucune donnée disponible.",

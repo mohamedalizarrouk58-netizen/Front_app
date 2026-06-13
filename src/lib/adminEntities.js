@@ -206,8 +206,8 @@ export const ADMIN_ENTITIES = [
           }
         },
       },
-      { key: 'diagnostic', label: 'Diagnostic', type: 'textarea' },
-      { key: 'solution_proposee', label: 'Proposed Solution', type: 'textarea' },
+      { key: 'diagnostic', label: 'Diagnostic', type: 'textarea', required: true },
+      { key: 'solution_proposee', label: 'Proposed Solution', type: 'textarea', required: true },
       { key: 'date_debut', label: 'Start Date', type: 'date' },
       { key: 'date_fin', label: 'End Date', type: 'date' },
     ],

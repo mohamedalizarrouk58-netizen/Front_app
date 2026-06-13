@@ -1,6 +1,5 @@
 import {
   ArrowRight,
-  CircleDollarSign,
   ClipboardList,
   Package,
   RefreshCw,
@@ -10,7 +9,6 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Button } from '../../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { extractApiErrorMessage } from '../../../lib/api'
 import { entityServices } from '../../../services/entities'
@@ -59,8 +57,6 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
     loadCounts()
   }, [loadCounts])
 
-  const total = counts.fournisseurs + counts.commandes + counts.prix
-
   const cards = useMemo(
     () => [
       {
@@ -96,34 +92,28 @@ function AchatPiecePage({ rolePath = 'chefstock' }) {
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-950 text-white p-6 sm:p-8">
-        <div className="absolute -top-14 -right-14 h-40 w-40 rounded-full bg-emerald-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-12 left-1/3 h-28 w-28 rounded-full bg-sky-500/20 blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-slate-300">Module</p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight">Achat Pièce</h1>
-            <p className="mt-2 text-sm text-slate-300 max-w-xl">
-              Espace dédié aux opérations d’achat: fournisseurs, commandes de pièces et gestion des prix.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-slate-300">{t('achat.title')}</p>
-              <p className="mt-1 text-3xl font-black">{loading ? '...' : total}</p>
-            </div>
-            <Button onClick={loadCounts} disabled={loading} className="rounded-xl bg-white text-slate-900 hover:bg-slate-100 gap-2">
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              {t('crud.refresh')}
-            </Button>
-          </div>
+      <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+            {t('nav.achatPiece')}
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {t('achat.subtitle')}
+          </p>
         </div>
-      </section>
+        <button
+          type="button"
+          onClick={() => void loadCounts()}
+          disabled={loading}
+          className="text-sm flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          {t('crud.refresh')}
+        </button>
+      </div>
 
       {error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
           {error}
         </div>
       ) : null}
