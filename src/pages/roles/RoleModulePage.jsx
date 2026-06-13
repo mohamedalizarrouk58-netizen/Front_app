@@ -226,7 +226,6 @@ function RoleModulePage() {
       return false
     }
     const blockedByRole = {
-      receptioniste: ['clients', 'materiels', 'demande-maintenances', 'factures'],
       manager: ['demande-maintenances', 'interventions', 'fiche-reparations', 'factures', 'messages'],
     }
     const blocked = blockedByRole[role] ?? []

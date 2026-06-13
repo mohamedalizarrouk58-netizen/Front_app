@@ -235,7 +235,7 @@ export const ROLE_WORKSPACES = {
         serviceKey: 'clients',
         icon: Users,
         columns: ['id', 'nom_complet', 'email', 'telephone', 'adresse'],
-        permissions: { create: true, update: true, delete: false },
+        permissions: { create: true, update: true, delete: true },
       },
       {
         key: 'materiels',
@@ -243,7 +243,7 @@ export const ROLE_WORKSPACES = {
         serviceKey: 'materiels',
         icon: HardDrive,
         columns: ['id', 'client', 'type', 'marque', 'modele', 'etat'],
-        permissions: { create: true, update: true, delete: false },
+        permissions: { create: true, update: true, delete: true },
       },
       {
         key: 'demande-maintenances',
@@ -252,8 +252,7 @@ export const ROLE_WORKSPACES = {
         icon: ClipboardList,
           columns: ['id', 'materiel', 'manager', 'priorite', 'statut', 'date_creation'],
           useMineEndpoint: true,
-          permissions: { create: true, update: true, delete: false },
-            editableFields: ['materiel', 'manager', 'priorite'],
+          permissions: { create: true, update: true, delete: true },
       },
       {
         key: 'factures',
@@ -261,9 +260,8 @@ export const ROLE_WORKSPACES = {
         serviceKey: 'factures',
         icon: ReceiptText,
         columns: ['id', 'intervention', 'client', 'montant_total', 'date_facture', 'est_payee'],
-        permissions: { create: false, update: true, delete: false },
-        editableFields: ['intervention', 'client', 'montant_total', 'date_facture'],
-        readOnlyFields: ['intervention', 'client', 'montant_total', 'date_facture'],
+        permissions: { create: false, update: true, delete: true },
+        editableFields: ['intervention', 'client', 'montant_total', 'date_facture', 'est_payee'],
       },
       {
         key: 'messages',
