@@ -1,5 +1,5 @@
 import { Navigate, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { ArrowLeft, Mail, Pencil, Plus, Printer, RefreshCw, Trash2, X, TrendingUp } from 'lucide-react'
+import { ArrowLeft, Mail, Pencil, Plus, Printer, RefreshCw, Trash2, X, TrendingUp, ReceiptText } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '../../components/ui/badge'
@@ -231,6 +231,19 @@ function RoleModulePage() {
     const blocked = blockedByRole[role] ?? []
     return !blocked.includes(moduleConfig?.key)
   }, [permissions.delete, role, moduleConfig?.key])
+
+  const canDeleteThisRow = useCallback(
+    (row) => {
+      if (!canDeleteRow) {
+        return false
+      }
+      if (role === 'receptioniste' && moduleConfig?.key === 'factures') {
+        return row?.est_payee === true || row?.est_payee === 'true'
+      }
+      return true
+    },
+    [canDeleteRow, role, moduleConfig?.key],
+  )
 
   const editableFields = useMemo(() => {
     if (!moduleEntity) {
@@ -1012,8 +1025,75 @@ function RoleModulePage() {
     }
   }
 
+  const sendFactureEmail = async (row) => {
+    if (!row?.id) {
+      return
+    }
+
+    const confirmMessage = row.email_client_envoye
+      ? t('module.resendInvoiceConfirm')
+      : t('module.sendInvoiceConfirm')
+
+    if (!confirm(confirmMessage)) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await runWithFeedback(
+        async () => {
+          await entityServices.factures.envoyerEmailClient(row.id)
+          await loadRows()
+        },
+        {
+          action: 'update',
+          entity: t('module.clientInvoice'),
+        },
+      )
+    } catch (requestError) {
+      setError(extractApiErrorMessage(requestError, t('module.sendInvoiceError')))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const generateFactureFromFiche = async (row) => {
+    if (!row?.id) {
+      return
+    }
+
+    if (!confirm(t('module.generateFactureConfirm'))) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await runWithFeedback(
+        async () => {
+          await entityServices['fiche-reparations'].genererFacture(row.id)
+        },
+        {
+          action: 'create',
+          entity: tModule('factures'),
+        },
+      )
+    } catch (requestError) {
+      setError(extractApiErrorMessage(requestError, t('module.generateFactureError')))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const markFacturePaid = async (row) => {
     if (!service || !row?.id) {
+      return
+    }
+
+    if (!confirm(t('module.markPaidConfirm'))) {
       return
     }
 
@@ -1641,7 +1721,7 @@ function RoleModulePage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end pl-4 ml-4 border-l border-slate-100 flex-shrink-0 sm:max-w-[280px]">
-                  {role === 'receptioniste' && row.statut === 'termine' && (
+                  {role === 'receptioniste' && row.statut === 'termine' && row.facture_id ? (
                     <Button
                       size="sm"
                       className={`h-7 text-xs px-2 gap-1 ${
@@ -1655,7 +1735,12 @@ function RoleModulePage() {
                       <Mail className="h-3.5 w-3.5" />
                       {row.facture_email_envoye ? t('module.resendInvoice') : t('module.sendInvoiceClient')}
                     </Button>
-                  )}
+                  ) : null}
+                  {role === 'receptioniste' && row.statut === 'termine' && !row.facture_id ? (
+                    <Badge variant="outline" className="text-[10px] border-amber-200 bg-amber-50 text-amber-700">
+                      {t('module.awaitingManagerFacture')}
+                    </Badge>
+                  ) : null}
                   {(role === 'manager' || role === 'administrateur' || role === 'admin') && row.statut === 'en_attente' && (
                     <>
                       <Button
@@ -1749,6 +1834,9 @@ function RoleModulePage() {
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">
                       {t('module.payment')}
                     </th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">
+                      {t('columns.email_client_envoye')}
+                    </th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-right">
                       {t('crud.actions')}
                     </th>
@@ -1757,6 +1845,7 @@ function RoleModulePage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredRows.map((row) => {
                     const isPaid = row.est_payee === true || row.est_payee === 'true'
+                    const emailSent = row.email_client_envoye === true || row.email_client_envoye === 'true'
                     const clientLabel =
                       row.client_nom ||
                       (typeof row.client === 'object'
@@ -1800,6 +1889,18 @@ function RoleModulePage() {
                             {isPaid ? t('common.paid') : t('common.unpaid')}
                           </Badge>
                         </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <Badge
+                            variant="outline"
+                            className={
+                              emailSent
+                                ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/20 dark:text-sky-300'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                            }
+                          >
+                            {emailSent ? t('module.emailSent') : t('module.emailNotSent')}
+                          </Badge>
+                        </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             <Button
@@ -1811,6 +1912,19 @@ function RoleModulePage() {
                               <Printer className="h-3.5 w-3.5 mr-1" />
                               {t('module.print')}
                             </Button>
+                            <Button
+                              size="sm"
+                              className={`h-8 px-2 gap-1 ${
+                                emailSent
+                                  ? 'bg-sky-600 hover:bg-sky-700 text-white'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                              }`}
+                              onClick={() => sendFactureEmail(row)}
+                              disabled={loading}
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                              {emailSent ? t('module.resendInvoice') : t('module.sendInvoiceClient')}
+                            </Button>
                             {!isPaid ? (
                               <Button
                                 size="sm"
@@ -1821,18 +1935,7 @@ function RoleModulePage() {
                                 {t('module.markPaid')}
                               </Button>
                             ) : null}
-                            {permissions.update && hasWritableFields ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 px-2 text-[#145f7a] hover:bg-sky-50"
-                                onClick={() => openEdit(row)}
-                              >
-                                <Pencil className="h-3.5 w-3.5 mr-1" />
-                                {t('crud.edit')}
-                              </Button>
-                            ) : null}
-                            {canDeleteRow ? (
+                            {canDeleteThisRow(row) ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -1985,13 +2088,26 @@ function RoleModulePage() {
                           </>
                         ) : null}
 
+                        {role === 'manager' && moduleConfig?.key === 'fiche-reparations' && row.valide_manager ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 gap-1.5 font-medium"
+                            onClick={() => generateFactureFromFiche(row)}
+                            disabled={loading}
+                          >
+                            <ReceiptText className="h-3.5 w-3.5" />
+                            {t('module.generateFacture')}
+                          </Button>
+                        ) : null}
+
                         {permissions.update && hasWritableFields ? (
                           <Button size="sm" variant="ghost" className="h-8 text-[#145f7a] hover:bg-sky-50 px-2" onClick={() => openEdit(row)}>
                             <Pencil className="h-3.5 w-3.5 mr-1.5" /> Modifier
                           </Button>
                         ) : null}
 
-                        {canDeleteRow ? (
+                        {canDeleteThisRow(row) ? (
                           <Button
                             size="sm"
                             variant="ghost"
