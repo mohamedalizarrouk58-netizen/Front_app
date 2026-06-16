@@ -800,7 +800,7 @@ function RoleModulePage() {
   }
 
   const openEdit = async (row) => {
-    if (!permissions.update || !hasWritableFields) {
+    if (!permissions.update) {
       return
     }
 
